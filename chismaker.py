@@ -492,6 +492,61 @@ class BackupFlashWorker(QThread):
             self.finished_signal.emit(self.device.port_name, False)
 
 
+class ReadInfoWorker(QThread):
+    """读取卡带信息工作线程（读取GBA ROM头）"""
+    log_signal = Signal(str, str)  # (device_name, message)
+    progress_signal = Signal(str, int)  # (device_name, progress)
+    finished_signal = Signal(str, bool)  # (device_name, success)
+
+    def __init__(self, device: DeviceInfo):
+        super().__init__()
+        self.device = device
+        self.running = True
+
+    def stop(self):
+        """停止线程"""
+        self.running = False
+
+    def run(self):
+        """读取并解析GBA ROM头（前192字节）"""
+        device_adapter = SuperChisDevice(self.device.serial)
+        port = self.device.port_name
+        try:
+            self.log_signal.emit(port, "开始读取卡带信息...")
+            device_adapter.set_sc_mode(sdram=0, sd_enable=0, write_enable=0)
+            device_adapter.set_flashmapping([0, 1, 2, 3, 4, 5, 6, 7])
+            time.sleep(0.01)
+
+            header = device_adapter.readRom(0, 192)
+            if len(header) != 192:
+                raise Exception("读取ROM头失败")
+
+            if all(b == 0xFF for b in header):
+                self.log_signal.emit(port, "卡带为空(Flash全为0xFF)")
+                self.finished_signal.emit(port, True)
+                return
+
+            # GBA头: 0xA0标题(12) 0xAC游戏代码(4) 0xB0厂商(2) 0xB2固定值0x96 0xBC版本 0xBD校验和
+            checksum = (-(sum(header[0xA0:0xBD]) + 0x19)) & 0xFF
+            valid = header[0xB2] == 0x96 and checksum == header[0xBD]
+            if not valid:
+                self.log_signal.emit(port, "未检测到有效的GBA ROM头")
+                self.finished_signal.emit(port, False)
+                return
+
+            title = header[0xA0:0xAC].split(b"\0")[0].decode("ascii", "replace")
+            code = header[0xAC:0xB0].decode("ascii", "replace")
+            maker = header[0xB0:0xB2].decode("ascii", "replace")
+            self.log_signal.emit(
+                port, f"游戏标题: {title} | 游戏代码: {code} | 厂商代码: {maker} | 版本: {header[0xBC]}")
+            self.finished_signal.emit(port, True)
+
+        except Exception as e:
+            traceback.print_exc()
+            self.log_signal.emit(port, f"读取信息失败: {e}")
+            self.finished_signal.emit(port, False)
+
+
 class ProductionWorker(QThread):
     """量产工作线程"""
     log_signal = Signal(str, str)  # (device_name, message)
@@ -909,7 +964,7 @@ class MainWindow(QMainWindow):
         self.device_table.setColumnWidth(0, 120)
         self.device_table.setColumnWidth(1, 140)
         self.device_table.setColumnWidth(2, 160)
-        self.device_table.setColumnWidth(3, 660)
+        self.device_table.setColumnWidth(3, 760)
         self.device_table.setColumnWidth(4, 450)
         
         device_layout.addWidget(self.device_table)
@@ -1073,6 +1128,9 @@ class MainWindow(QMainWindow):
                 button_layout.addWidget(quality_btn)
                 button_layout.addWidget(production_btn)
                 button_layout.addWidget(reset_nor_btn)
+                info_btn = QPushButton(tr("读取信息"))
+                info_btn.clicked.connect(lambda checked, p=port: self.start_read_info(p))
+                button_layout.addWidget(info_btn)
                 button_layout.addWidget(backup_btn)
                 
                 self.device_table.setCellWidget(row, 3, button_widget)
@@ -1270,6 +1328,27 @@ class MainWindow(QMainWindow):
         self.workers[port] = worker
         worker.start()
     
+    def start_read_info(self, port: str):
+        """读取单个设备的卡带信息"""
+        device = self.devices.get(port)
+        if not device or not device.is_connected():
+            QMessageBox.warning(self, tr("警告"), tr(f"{port} 未连接"))
+            return
+
+        # 如果已有工作线程在运行,先停止它
+        if port in self.workers and self.workers[port].isRunning():
+            self.workers[port].stop()
+            self.workers[port].wait(1000)
+
+        worker = ReadInfoWorker(device)
+        worker.log_signal.connect(self.on_worker_log)
+        worker.progress_signal.connect(self.on_worker_progress)
+        worker.finished_signal.connect(self.on_worker_finished)
+        worker.finished.connect(lambda: self.cleanup_worker(port))
+
+        self.workers[port] = worker
+        worker.start()
+
     def start_backup_flash_all(self):
         """批量备份Flash"""
         # 选择保存目录

@@ -25,6 +25,7 @@ EXACT = {
     '量产': 'Producir',
     '重置NOR': 'Reset NOR',
     '备份': 'Respaldo',
+    '读取信息': 'Leer info',
     '警告': 'Advertencia',
     '未连接': 'Desconectado',
     '已连接': 'Conectado',
@@ -41,6 +42,15 @@ EXACT = {
 
 # Fragmentos (se reemplazan de mayor a menor longitud dentro del texto)
 FRAGMENTS = {
+    '开始读取卡带信息...': 'Leyendo información del cartucho...',
+    '卡带为空(Flash全为0xFF)': 'Cartucho vacío (Flash toda en 0xFF)',
+    '未检测到有效的GBA ROM头': 'No se detectó un encabezado de ROM GBA válido',
+    '游戏标题: ': 'Título: ',
+    ' | 游戏代码: ': ' | Código: ',
+    ' | 厂商代码: ': ' | Fabricante: ',
+    ' | 版本: ': ' | Versión: ',
+    '读取ROM头失败': 'Falló la lectura del encabezado ROM',
+    '读取信息失败: ': 'Falló la lectura de información: ',
     '设置Flash映射': 'Configurar el mapeo de Flash',
     'SuperChis 自动量产工具 V2': 'SuperChis Herramienta de Producción Automática V2',
     '功能：': 'Funciones:',
