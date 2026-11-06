@@ -1,6 +1,6 @@
 """
-SuperChis设备适配器 - 线程安全版本
-每个设备实例独立管理serial连接
+Adaptador de dispositivo SuperChis - versión segura para hilos
+Cada instancia de dispositivo gestiona su propia conexión serial
 """
 
 import struct
@@ -9,27 +9,27 @@ import time
 import serial.tools.list_ports
 
 
-# SuperChis配置常量
-MAGIC_ADDRESS = 0x01FFFFFE  # 魔术解锁地址
-MAGIC_VALUE = 0xA55A        # 魔术解锁值
+# Constantes de configuración de SuperChis
+MAGIC_ADDRESS = 0x01FFFFFE  # Dirección mágica de desbloqueo
+MAGIC_VALUE = 0xA55A        # Valor mágico de desbloqueo
 
-# Flash元数据常量
+# Constantes de metadatos de Flash
 ROM_OFF_FLASHMETA = 0x00200000
 FLASH_METADATA_SIZE = 0x00200000
 
 class SuperChisDevice:
-    """SuperChis设备类 - 线程安全"""
+    """Clase de dispositivo SuperChis - segura para hilos"""
     
     def __init__(self, serial_port):
         """
-        初始化设备
+        Inicializar dispositivo
         Args:
-            serial_port: serial.Serial对象
+            serial_port: objeto serial.Serial
         """
         self.ser = serial_port
     
     def writeRom(self, addr_word, dat):
-        """向ROM地址写入数据"""
+        """Escribir datos en una dirección ROM"""
         if isinstance(dat, int):
             dat = struct.pack("<H", dat)
         
@@ -45,7 +45,7 @@ class SuperChisDevice:
         return ack
     
     def readRom(self, addr_word, length_byte):
-        """从ROM地址读取数据"""
+        """Leer datos de una dirección ROM"""
         cmd = []
         cmd.extend(struct.pack("<H", 2 + 1 + 4 + 2 + 2))
         cmd.append(0xf6)
@@ -58,7 +58,7 @@ class SuperChisDevice:
         return respon[2:]
     
     def writeRam(self, addr, dat):
-        """向RAM地址写入数据"""
+        """Escribir datos en una dirección RAM"""
         if isinstance(dat, int):
             dat = struct.pack("B", dat)
         
@@ -74,7 +74,7 @@ class SuperChisDevice:
         return ack
     
     def readRam(self, addr, length_byte):
-        """从RAM地址读取数据"""
+        """Leer datos de una dirección RAM"""
         cmd = []
         cmd.extend(struct.pack("<H", 2 + 1 + 4 + 2 + 2))
         cmd.append(0xf8)
@@ -87,7 +87,7 @@ class SuperChisDevice:
         return respon[2:]
     
     def set_sc_mode(self, sdram, sd_enable, write_enable, sram_bank=0, ctrl=0x8):
-        """执行SuperChis解锁序列"""
+        """Ejecutar la secuencia de desbloqueo de SuperChis"""
         magic_addr_word = MAGIC_ADDRESS >> 1
         config1 = (ctrl << 4) | (sdram | (sd_enable << 1) | (write_enable << 2) | (sram_bank << 3))
         
@@ -98,13 +98,13 @@ class SuperChisDevice:
         return True
     
     def sram_bank_select(self, bank):
-        """选择SRAM Bank"""
-        # 兼容D卡bank切换
+        """Seleccionar banco SRAM"""
+        # Compatible con el cambio de banco de la tarjeta D
         self.writeRom(0x800000, bank)
         return self.set_sc_mode(sdram=0, sd_enable=0, write_enable=0, sram_bank=bank, ctrl=0xF^(1<<3))
     
     def set_flashmapping(self, mapping):
-        """设置Flash映射"""
+        """Configurar el mapeo de Flash"""
         if len(mapping) != 8:
             raise ValueError("Mapping must be a list of 8 integers.")
         
@@ -119,7 +119,7 @@ class SuperChisDevice:
         return True
     
     def readRomID(self):
-        """读取ROM Flash ID"""
+        """Leer el ID de la Flash ROM"""
         self.writeRom(0x000555, 0xaa)
         self.writeRom(0x0002aa, 0x55)
         self.writeRom(0x000555, 0x90)
@@ -134,7 +134,7 @@ class SuperChisDevice:
         return id_data
     
     def getRomCFI(self):
-        """获取ROM CFI信息"""
+        """Obtener información CFI de la ROM"""
         self.writeRom(0x55, 0x98)
         cfi = self.readRom(0x27, 20)
         self.writeRom(0x00, 0xf0)
@@ -161,7 +161,7 @@ class SuperChisDevice:
         }
     
     def getRomEraseTime(self):
-        """获取ROM擦除时间（毫秒）"""
+        """Obtener el tiempo de borrado de la ROM (milisegundos)"""
         cfi_info = self.getRomCFI()
         
         self.writeRom(0x55, 0x98)
@@ -180,7 +180,7 @@ class SuperChisDevice:
             return timeout_chip
     
     def eraseChip(self):
-        """擦除整个芯片"""
+        """Borrar el chip completo"""
         self.writeRom(0x000555, 0xaa)
         self.writeRom(0x0002aa, 0x55)
         self.writeRom(0x000555, 0x80)
@@ -198,7 +198,7 @@ class SuperChisDevice:
         return True
     
     def eraseSector(self, addr_word, sector_size_words):
-        """擦除指定扇区"""
+        """Borrar el sector indicado"""
         self.writeRom(0x000555, 0xaa)
         self.writeRom(0x0002aa, 0x55)
         self.writeRom(0x000555, 0x80)
@@ -217,29 +217,29 @@ class SuperChisDevice:
     
     def programRom(self, addr_byte, data, buffer_write_bytes=None):
         """
-        写入ROM数据（使用固件0xf4命令）
+        Escribir datos en la ROM (usando el comando 0xf4 del firmware)
         
         Args:
-            addr_byte: 字节地址（注意：0xf4命令使用字节地址，不是字地址）
-            data: 要写入的数据
-            buffer_write_bytes: Buffer Write大小（如果为None则自动查询CFI）
+            addr_byte: dirección en bytes (nota: el comando 0xf4 usa direcciones en bytes, no en palabras)
+            data: datos a escribir
+            buffer_write_bytes: tamaño de Buffer Write (si es None se consulta el CFI automáticamente)
         """
         if isinstance(data, int):
             data = struct.pack("<H", data)
         
-        # 如果没有提供buffer_write_bytes，则查询CFI
+        # Si no se indicó buffer_write_bytes, se consulta el CFI
         if buffer_write_bytes is None:
             cfi_info = self.getRomCFI()
             buffer_write_bytes = cfi_info['buffer_write_bytes']
         
-        # 构造数据包
+        # Construir el paquete de datos
         cmd = []
-        cmd.extend(struct.pack("<H", 2 + 1 + 4 + 2 + len(data) + 2))  # 包大小
+        cmd.extend(struct.pack("<H", 2 + 1 + 4 + 2 + len(data) + 2))  # tamaño del paquete
         cmd.append(0xf4)  # rom program cmd
-        cmd.extend(struct.pack("<I", addr_byte))  # base address (字节地址)
+        cmd.extend(struct.pack("<I", addr_byte))  # base address (dirección en bytes)
         cmd.extend(struct.pack("<H", buffer_write_bytes))  # bufferWriteBytes
         cmd.extend(data)  # data
-        cmd.extend([0, 0])  # CRC占位
+        cmd.extend([0, 0])  # marcador de posición CRC
         
         self.ser.write(cmd)
         ack = self.ser.read(1)
@@ -247,7 +247,7 @@ class SuperChisDevice:
         return ack == b'\xaa'
     
     def unlockPPB(self):
-        """解锁所有扇区的PPB保护"""
+        """Desbloquear la protección PPB de todos los sectores"""
         self.set_flashmapping([0, 1, 2, 3, 4, 5, 6, 7])
         
         self.writeRom(0x000555, 0xaa)
@@ -272,7 +272,7 @@ class SuperChisDevice:
         return True
     
     def checkPPBLocked(self):
-        """检查PPB是否被锁定"""
+        """Comprobar si el PPB está bloqueado"""
         self.writeRom(0x000555, 0xaa)
         self.writeRom(0x0002aa, 0x55)
         self.writeRom(0x000555, 0x50)
@@ -287,25 +287,25 @@ class SuperChisDevice:
         return lock_status != 0
     
     def verifyRom(self, addr_word, expected_data):
-        """验证ROM数据"""
+        """Verificar los datos de la ROM"""
         actual_data = self.readRom(addr_word, len(expected_data))
         return actual_data == expected_data
     
     def eraseFlashMetadata(self):
-        """擦除Flash元数据常量区域 - 重置NOR游戏功能"""
+        """Borrar la zona de constantes de metadatos de Flash - función de reinicio de juegos NOR"""
         self.set_flashmapping([0, 1, 2, 3, 4, 5, 6, 7])
-        # Flash元数据区域起始地址和大小
+        # Dirección inicial y tamaño de la zona de metadatos de Flash
         meta_start = ROM_OFF_FLASHMETA  # 0x00200000
         meta_size = FLASH_METADATA_SIZE  # 0x00200000 (2MB)
         
-        # 获取CFI信息
+        # Obtener información CFI
         cfi_info = self.getRomCFI()
         sector_size = cfi_info['sector_size']
         
-        # 计算需要擦除的扇区数量
+        # Calcular el número de sectores a borrar
         sector_count = meta_size // sector_size
         
-        # 擦除所有元数据区域的扇区
+        # Borrar todos los sectores de la zona de metadatos
         for i in range(sector_count):
             addr_byte = meta_start + i * sector_size
             addr_word = addr_byte >> 1

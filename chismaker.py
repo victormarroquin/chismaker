@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-SuperChis 自动量产工具 V2
-功能：
-1. 多设备管理（自动连接、断开、状态指示）
-2. 可配置自动质检（SRAM读写、Flash擦除、PPB解锁、Backup Flash检测等）
-3. 选定文件自动量产（直接擦除和写入ROM）
+SuperChis Herramienta de Producción Automática V2
+Funciones:
+1. Gestión de múltiples dispositivos (conexión/desconexión automática, indicador de estado)
+2. Control de calidad automático configurable (lectura/escritura SRAM, borrado de Flash, desbloqueo PPB, detección de Backup Flash, etc.)
+3. Producción automática con el archivo elegido (borrado y escritura directa de la ROM)
 """
 
 import sys
@@ -29,35 +29,35 @@ from PySide6.QtGui import QColor
 import serial.tools.list_ports
 import serial
 
-# 导入设备适配器
+# Importar el adaptador de dispositivo
 from device_adapter import SuperChisDevice
 
 
-# 质检配置类
+# Clase de configuración del control de calidad
 class QualityCheckConfig:
-    """质检配置"""
+    """Configuración del control de calidad"""
     def __init__(self):
-        self.enable_ppb_unlock = True         # Flash PPB解锁
-        self.enable_sram_test = False          # SRAM读写检测
-        self.enable_flash_erase = False        # Flash擦除查空
-        self.enable_fast_flash = False        # 快速Flash质检（首尾4M+随机8M）
-        self.enable_full_sram = True         # 全量SRAM检测（128KB）
-        self.enable_ram_flash = False         # Backup Flash检测
+        self.enable_ppb_unlock = True         # Desbloqueo PPB de Flash
+        self.enable_sram_test = False          # Prueba de lectura/escritura SRAM
+        self.enable_flash_erase = False        # Borrado y verificación de Flash vacía
+        self.enable_fast_flash = False        # Control rápido de Flash (4M iniciales y finales + 8M aleatorios)
+        self.enable_full_sram = True         # Prueba completa de SRAM (128KB)
+        self.enable_ram_flash = False         # Detección de Backup Flash
 
 
 class DeviceInfo:
-    """设备信息类"""
+    """Clase de información del dispositivo"""
     def __init__(self, port_name: str):
         self.port_name = port_name
         self.serial: Optional[serial.Serial] = None
-        self.status = "未连接"
+        self.status = "Desconectado"
         self.rom_id = None
         self.cfi_info = None
         self.last_operation = ""
         self.error_count = 0
     
     def connect(self) -> bool:
-        """连接设备"""
+        """Conectar dispositivo"""
         try:
             self.serial = serial.Serial()
             self.serial.port = self.port_name
@@ -66,25 +66,25 @@ class DeviceInfo:
             self.serial.open()
             self.serial.dtr = True
             self.serial.dtr = False
-            self.status = "已连接"
+            self.status = "Conectado"
             return True
         except Exception as e:
-            self.status = f"连接失败: {e}"
+            self.status = f"Conexión fallida: {e}"
             return False
     
     def disconnect(self):
-        """断开设备"""
+        """Desconectar dispositivo"""
         if self.serial and self.serial.is_open:
             self.serial.close()
-        self.status = "未连接"
+        self.status = "Desconectado"
     
     def is_connected(self) -> bool:
-        """检查是否已连接"""
+        """Comprobar si está conectado"""
         return self.serial is not None and self.serial.is_open
 
 
 class DeviceScanner(QThread):
-    """设备扫描线程"""
+    """Hilo de escaneo de dispositivos"""
     devices_found = Signal(list)
     
     def __init__(self):
@@ -92,7 +92,7 @@ class DeviceScanner(QThread):
         self.running = True
     
     def run(self):
-        """扫描设备"""
+        """Escanear dispositivos"""
         while self.running:
             ports = serial.tools.list_ports.comports()
             device_ports = []
@@ -102,15 +102,15 @@ class DeviceScanner(QThread):
                     device_ports.append(port.device)
             
             self.devices_found.emit(device_ports)
-            time.sleep(2)  # 每2秒扫描一次
+            time.sleep(2)  # escanear cada 2 segundos
     
     def stop(self):
-        """停止扫描"""
+        """Detener escaneo"""
         self.running = False
 
 
 class QualityCheckWorker(QThread):
-    """质检工作线程"""
+    """Hilo de trabajo de control de calidad"""
     log_signal = Signal(str, str)  # (device_name, message)
     progress_signal = Signal(str, int)  # (device_name, progress)
     finished_signal = Signal(str, bool)  # (device_name, success)
@@ -122,18 +122,18 @@ class QualityCheckWorker(QThread):
         self.running = True
     
     def stop(self):
-        """停止线程"""
+        """Detener hilo"""
         self.running = False
     
     def run(self):
-        """执行质检流程"""
-        # 创建设备适配器
+        """Ejecutar el proceso de control de calidad"""
+        # Crear el adaptador de dispositivo
         device_adapter = SuperChisDevice(self.device.serial)
         
         try:
-            self.log_signal.emit(self.device.port_name, "开始质检...")
+            self.log_signal.emit(self.device.port_name, "Iniciando control de calidad...")
             
-            # 计算启用的测试项数量
+            # Calcular el número de pruebas habilitadas
             test_count = sum([
                 self.config.enable_sram_test,
                 self.config.enable_flash_erase or self.config.enable_fast_flash,
@@ -143,30 +143,30 @@ class QualityCheckWorker(QThread):
             ])
             
             if test_count == 0:
-                self.log_signal.emit(self.device.port_name, "未启用任何测试项")
+                self.log_signal.emit(self.device.port_name, "No hay ninguna prueba habilitada")
                 self.finished_signal.emit(self.device.port_name, False)
                 return
             
             current_test = 0
             progress_per_test = 100 / test_count
             
-            # 1. Flash PPB解锁（在Flash操作之前）
+            # 1. Desbloqueo PPB de Flash (antes de las operaciones de Flash)
             if self.config.enable_ppb_unlock and self.running:
                 current_test += 1
-                self.log_signal.emit(self.device.port_name, f"{current_test}/{test_count} Flash PPB解锁...")
+                self.log_signal.emit(self.device.port_name, f"{current_test}/{test_count} Desbloqueo PPB de Flash...")
                 self.progress_signal.emit(self.device.port_name, int((current_test - 0.5) * progress_per_test))
                 
                 device_adapter.set_sc_mode(sdram=0, sd_enable=0, write_enable=1)
                 device_adapter.set_flashmapping([0, 1, 2, 3, 4, 5, 6, 7])
                 device_adapter.unlockPPB()
                 
-                self.log_signal.emit(self.device.port_name, "✓ PPB解锁完成")
+                self.log_signal.emit(self.device.port_name, "✓ Desbloqueo PPB completado")
                 self.progress_signal.emit(self.device.port_name, int(current_test * progress_per_test))
 
-            # 2. SRAM读写检测（基础）
+            # 2. Prueba de lectura/escritura SRAM (básica)
             if self.config.enable_sram_test and self.running:
                 current_test += 1
-                self.log_signal.emit(self.device.port_name, f"{current_test}/{test_count} SRAM基础读写检测...")
+                self.log_signal.emit(self.device.port_name, f"{current_test}/{test_count} Prueba básica de lectura/escritura SRAM...")
                 self.progress_signal.emit(self.device.port_name, int((current_test - 0.5) * progress_per_test))
                 
                 device_adapter.sram_bank_select(0)
@@ -178,42 +178,42 @@ class QualityCheckWorker(QThread):
                 read_data = device_adapter.readRam(0x0000, len(test_data))
                 
                 if read_data != test_data:
-                    raise Exception(f"SRAM基础测试失败")
+                    raise Exception(f"Fallo en la prueba básica de SRAM")
                 
-                self.log_signal.emit(self.device.port_name, "✓ SRAM基础测试通过")
+                self.log_signal.emit(self.device.port_name, "✓ Prueba básica de SRAM superada")
                 self.progress_signal.emit(self.device.port_name, int(current_test * progress_per_test))
             
-            # 3. 全量SRAM检测（可选）
+            # 3. Prueba completa de SRAM (opcional)
             if self.config.enable_full_sram and self.running:
                 current_test += 1
-                self.log_signal.emit(self.device.port_name, f"{current_test}/{test_count} 全量SRAM检测(128KB)...")
+                self.log_signal.emit(self.device.port_name, f"{current_test}/{test_count} Prueba completa de SRAM (128KB)...")
                 self.progress_signal.emit(self.device.port_name, int((current_test - 0.5) * progress_per_test))
 
-                # 测试128KB
+                # Probar 128KB
                 device_adapter.sram_bank_select(0)
                 time.sleep(0.01)
                 
-                # 写入测试数据
+                # Escribir datos de prueba
                 chunk_size = 1024
                 for addr in range(0, 65536*2, chunk_size):
                     if addr % (65536) == 0:
                         device_adapter.sram_bank_select(addr // 65536)
                         self.log_signal.emit(self.device.port_name, 
-                            f"  切换到SRAM Bank {addr // 65536}")
-                    # 生成测试数据
+                            f"  Cambiando al banco SRAM {addr // 65536}")
+                    # Generar datos de prueba
                     test_data = bytes([(addr + i) & 0xFF for i in range(chunk_size)])
                     device_adapter.writeRam(addr, test_data)
                     
-                    # 立即验证
+                    # Verificar de inmediato
                     read_data = device_adapter.readRam(addr, chunk_size)
                     if read_data != test_data:
-                        raise Exception(f"SRAM全量测试失败于地址 0x{addr:04X}")
+                        raise Exception(f"Fallo en la prueba completa de SRAM en la dirección 0x{addr:04X}")
                 
-                self.log_signal.emit(self.device.port_name, "✓ SRAM全量测试通过(128KB)")
+                self.log_signal.emit(self.device.port_name, "✓ Prueba completa de SRAM superada (128KB)")
                 self.progress_signal.emit(self.device.port_name, int(current_test * progress_per_test))
             
             
-            # 4. Flash擦除查空或快速Flash质检
+            # 4. Borrado/verificación de Flash vacía o control rápido de Flash
             if (self.config.enable_flash_erase or self.config.enable_fast_flash) and self.running:
                 current_test += 1
                 
@@ -221,33 +221,33 @@ class QualityCheckWorker(QThread):
                 device_adapter.set_flashmapping([0, 1, 2, 3, 4, 5, 6, 7])
                 
                 if self.config.enable_fast_flash:
-                    # 快速Flash质检：首尾4M + 随机8M
-                    self.log_signal.emit(self.device.port_name, f"{current_test}/{test_count} 快速Flash质检(首尾4M+随机8M)...")
+                    # Control rápido de Flash: 4M iniciales y finales + 8M aleatorios
+                    self.log_signal.emit(self.device.port_name, f"{current_test}/{test_count} Control rápido de Flash (4M iniciales y finales + 8M aleatorios)...")
                     self.progress_signal.emit(self.device.port_name, int((current_test - 0.5) * progress_per_test))
                     
-                    # 获取CFI信息
+                    # Obtener información CFI
                     cfi_info = device_adapter.getRomCFI()
                     sector_size = cfi_info['sector_size']
                     device_size = cfi_info['device_size']
                     
-                    # 计算需要擦除的区域
+                    # Calcular las zonas a borrar
                     test_regions = []
                     
-                    # 首4M
+                    # Primeros 4M
                     test_regions.append((0, 4 * 1024 * 1024))
                     
-                    # 尾4M
+                    # Últimos 4M
                     end_start = device_size - 4 * 1024 * 1024
                     test_regions.append((end_start, device_size))
                     
-                    # 随机8M（分成4个2M区域）
+                    # 8M aleatorios (en 4 zonas de 2M)
                     random.seed(int(time.time()))
                     for _ in range(4):
                         random_start = random.randint(4 * 1024 * 1024, device_size - 6 * 1024 * 1024)
-                        random_start = (random_start // sector_size) * sector_size  # 对齐扇区
+                        random_start = (random_start // sector_size) * sector_size  # alinear al sector
                         test_regions.append((random_start, random_start + 2 * 1024 * 1024))
                     
-                    # 擦除测试区域
+                    # Borrar las zonas de prueba
                     total_sectors = 0
                     for start, end in test_regions:
                         sector_count = (end - start) // sector_size
@@ -263,80 +263,80 @@ class QualityCheckWorker(QThread):
                             
                             if erased_sectors % 10 == 0:
                                 self.log_signal.emit(self.device.port_name, 
-                                    f"已擦除 {erased_sectors}/{total_sectors} 扇区")
+                                    f"Borrados {erased_sectors}/{total_sectors} sectores")
                     
-                    # 验证擦除结果
+                    # Verificar el resultado del borrado
                     for start, end in test_regions:
                         for addr in range(start, end, 4096):
                             data = device_adapter.readRom(addr >> 1, min(4096, end - addr))
                             if not all(b == 0xff for b in data):
-                                raise Exception(f"Flash擦除验证失败于地址 0x{addr:08X}")
+                                raise Exception(f"Falló la verificación del borrado de Flash en la dirección 0x{addr:08X}")
                     
-                    self.log_signal.emit(self.device.port_name, "✓ 快速Flash质检通过(16MB)")
+                    self.log_signal.emit(self.device.port_name, "✓ Control rápido de Flash superado (16MB)")
                     
                 else:
-                    # 全片擦除查空
-                    self.log_signal.emit(self.device.port_name, f"{current_test}/{test_count} Flash擦除查空...")
+                    # Borrado total y verificación de vacío
+                    self.log_signal.emit(self.device.port_name, f"{current_test}/{test_count} Borrado y verificación de Flash vacía...")
                     self.progress_signal.emit(self.device.port_name, int((current_test - 0.5) * progress_per_test))
                     
-                    # 检查第一个扇区是否为空
+                    # Comprobar si el primer sector está vacío
                     first_sector = device_adapter.readRom(0x000000, 512)
                     is_empty = all(b == 0xff for b in first_sector)
                     
                     if not is_empty:
-                        self.log_signal.emit(self.device.port_name, "Flash不为空，执行全片擦除...")
+                        self.log_signal.emit(self.device.port_name, "La Flash no está vacía, ejecutando borrado total...")
                         device_adapter.eraseChip()
-                        self.log_signal.emit(self.device.port_name, "✓ Flash擦除完成")
+                        self.log_signal.emit(self.device.port_name, "✓ Borrado de Flash completado")
                     else:
-                        self.log_signal.emit(self.device.port_name, "✓ Flash已为空")
+                        self.log_signal.emit(self.device.port_name, "✓ La Flash ya está vacía")
                 
                 self.progress_signal.emit(self.device.port_name, int(current_test * progress_per_test))
             
-            # 5. Backup Flash检测（RAM地址映射到Flash）
+            # 5. Detección de Backup Flash (dirección RAM mapeada a Flash)
             if self.config.enable_ram_flash and self.running:
                 current_test += 1
-                self.log_signal.emit(self.device.port_name, f"{current_test}/{test_count} Backup Flash检测...")
+                self.log_signal.emit(self.device.port_name, f"{current_test}/{test_count} Detección de Backup Flash...")
                 self.progress_signal.emit(self.device.port_name, int((current_test - 0.5) * progress_per_test))
                 
-                # 测试RAM地址是否映射到Flash
-                # 通常0x0A000000-0x0AFFFFFF应该映射到Flash
+                # Probar si la dirección RAM está mapeada a Flash
+                # Normalmente 0x0A000000-0x0AFFFFFF debería estar mapeado a Flash
                 test_patterns = [
                     (0x5555, 0xAA),
                     (0x2AAA, 0x55),
-                    (0x0000, 0x90),  # Flash ID命令
+                    (0x0000, 0x90),  # comando de ID de Flash
                 ]
                 
                 for addr, value in test_patterns:
                     device_adapter.writeRam(addr, value)
                     time.sleep(0.001)
                 
-                # 读取Flash ID通过RAM接口
+                # Leer el ID de Flash a través de la interfaz RAM
                 manufacturer = device_adapter.readRam(0x0000, 2)
                 device_id = device_adapter.readRam(0x0002, 2)
                 
-                # 退出ID模式
+                # Salir del modo ID
                 device_adapter.writeRam(0x0000, 0xF0)
                 
-                # 验证读取到有效ID
+                # Verificar que se leyó un ID válido
                 if manufacturer != b'\xff\xff' and device_id != b'\xff\xff':
                     self.log_signal.emit(self.device.port_name, 
-                        f"✓ Backup Flash检测通过 (Mfr: {manufacturer.hex()}, ID: {device_id.hex()})")
+                        f"✓ Detección de Backup Flash superada (Mfr: {manufacturer.hex()}, ID: {device_id.hex()})")
                 else:
-                    raise Exception("Backup Flash检测失败：无法读取Flash ID")
+                    raise Exception("Falló la detección de Backup Flash: no se pudo leer el ID de Flash")
                 
                 self.progress_signal.emit(self.device.port_name, int(current_test * progress_per_test))
             
             self.progress_signal.emit(self.device.port_name, 100)
-            self.log_signal.emit(self.device.port_name, "质检完成 ✓")
+            self.log_signal.emit(self.device.port_name, "Control de calidad completado ✓")
             self.finished_signal.emit(self.device.port_name, True)
             
         except Exception as e:
-            self.log_signal.emit(self.device.port_name, f"质检失败: {e}")
+            self.log_signal.emit(self.device.port_name, f"Falló el control de calidad: {e}")
             self.finished_signal.emit(self.device.port_name, False)
 
 
 class ResetNorWorker(QThread):
-    """重置NOR游戏工作线程"""
+    """Hilo de trabajo de reinicio de juegos NOR"""
     log_signal = Signal(str, str)  # (device_name, message)
     progress_signal = Signal(str, int)  # (device_name, progress)
     finished_signal = Signal(str, bool)  # (device_name, success)
@@ -347,53 +347,53 @@ class ResetNorWorker(QThread):
         self.running = True
     
     def stop(self):
-        """停止线程"""
+        """Detener hilo"""
         self.running = False
     
     def run(self):
-        """执行重置NOR游戏流程"""
+        """Ejecutar el proceso de reinicio de juegos NOR"""
         device_adapter = SuperChisDevice(self.device.serial)
         
         try:
-            self.log_signal.emit(self.device.port_name, "开始重置NOR游戏...")
+            self.log_signal.emit(self.device.port_name, "Iniciando reinicio de juegos NOR...")
             self.progress_signal.emit(self.device.port_name, 10)
             
-            # 设置写使能模式
+            # Configurar el modo de escritura habilitada
             device_adapter.set_sc_mode(sdram=0, sd_enable=0, write_enable=1)
             device_adapter.set_flashmapping([0, 1, 2, 3, 4, 5, 6, 7])
-            self.log_signal.emit(self.device.port_name, "设置Flash映射完成")
+            self.log_signal.emit(self.device.port_name, "Mapeo de Flash configurado")
             self.progress_signal.emit(self.device.port_name, 20)
             
-            # 解锁PPB保护
-            self.log_signal.emit(self.device.port_name, "解锁Flash PPB保护...")
+            # Desbloquear la protección PPB
+            self.log_signal.emit(self.device.port_name, "Desbloqueando la protección PPB de Flash...")
             device_adapter.unlockPPB()
             self.progress_signal.emit(self.device.port_name, 30)
             
-            # 擦除Flash元数据区域
-            self.log_signal.emit(self.device.port_name, "正在擦除Flash元数据区域(2MB)...")
+            # Borrar la zona de metadatos de Flash
+            self.log_signal.emit(self.device.port_name, "Borrando la zona de metadatos de Flash (2MB)...")
             device_adapter.eraseFlashMetadata()
             self.progress_signal.emit(self.device.port_name, 80)
             
-            # 验证擦除结果
-            self.log_signal.emit(self.device.port_name, "验证擦除结果...")
+            # Verificar el resultado del borrado
+            self.log_signal.emit(self.device.port_name, "Verificando el resultado del borrado...")
             meta_start_word = 0x00200000 >> 1
             verify_data = device_adapter.readRom(meta_start_word, 512)
             
             if not all(b == 0xff for b in verify_data):
-                raise Exception("Flash元数据区域擦除验证失败")
+                raise Exception("Falló la verificación del borrado de la zona de metadatos de Flash")
             
-            self.log_signal.emit(self.device.port_name, "重置NOR游戏完成 ✓")
+            self.log_signal.emit(self.device.port_name, "Reinicio de juegos NOR completado ✓")
             self.progress_signal.emit(self.device.port_name, 100)
             self.finished_signal.emit(self.device.port_name, True)
             
         except Exception as e:
             traceback.print_exc()
-            self.log_signal.emit(self.device.port_name, f"重置NOR游戏失败: {e}")
+            self.log_signal.emit(self.device.port_name, f"Falló el reinicio de juegos NOR: {e}")
             self.finished_signal.emit(self.device.port_name, False)
 
 
 class BackupFlashWorker(QThread):
-    """备份Flash工作线程"""
+    """Hilo de trabajo de respaldo de Flash"""
     log_signal = Signal(str, str)  # (device_name, message)
     progress_signal = Signal(str, int)  # (device_name, progress)
     finished_signal = Signal(str, bool)  # (device_name, success)
@@ -402,49 +402,49 @@ class BackupFlashWorker(QThread):
         super().__init__()
         self.device = device
         self.backup_file = backup_file
-        self.backup_size = backup_size  # 默认128MB
+        self.backup_size = backup_size  # por defecto 128MB
         self.running = True
     
     def stop(self):
-        """停止线程"""
+        """Detener hilo"""
         self.running = False
     
     def run(self):
-        """执行备份流程"""
+        """Ejecutar el proceso de respaldo"""
         device_adapter = SuperChisDevice(self.device.serial)
         
         try:
-            self.log_signal.emit(self.device.port_name, "开始备份Flash...")
+            self.log_signal.emit(self.device.port_name, "Iniciando respaldo de Flash...")
             self.progress_signal.emit(self.device.port_name, 0)
             
-            # 设置Flash读取模式
+            # Configurar el modo de lectura de Flash
             device_adapter.set_sc_mode(sdram=0, sd_enable=0, write_enable=0)
             device_adapter.set_flashmapping([0, 1, 2, 3, 4, 5, 6, 7])
             time.sleep(0.01)
             
-            self.log_signal.emit(self.device.port_name, "设置Flash映射完成")
+            self.log_signal.emit(self.device.port_name, "Mapeo de Flash configurado")
             
-            # 获取CFI信息
+            # Obtener información CFI
             cfi_info = device_adapter.getRomCFI()
             device_size = cfi_info['device_size']
             
-            self.log_signal.emit(self.device.port_name, f"Flash大小: {device_size // (1024*1024)}MB")
+            self.log_signal.emit(self.device.port_name, f"Tamaño de Flash: {device_size // (1024*1024)}MB")
             
-            # 使用指定大小或设备大小中较小的
+            # Usar el menor entre el tamaño indicado y el del dispositivo
             total_size = min(self.backup_size, device_size)
-            self.log_signal.emit(self.device.port_name, f"备份大小: {total_size // (1024*1024)}MB")
+            self.log_signal.emit(self.device.port_name, f"Tamaño del respaldo: {total_size // (1024*1024)}MB")
             
-            # 打开文件准备写入
+            # Abrir el archivo para escribir
             with open(self.backup_file, 'wb') as f:
-                read_chunk_size = 4096  # 每次读取4KB
+                read_chunk_size = 4096  # leer 4KB cada vez
                 read_bytes = 0
                 
-                # 按32MB分段切换映射
+                # Cambiar el mapeo por segmentos de 32MB
                 segment_size = 32 * 1024 * 1024
                 current_segment = 0
                 
                 while read_bytes < total_size and self.running:
-                    # 检查是否需要切换Flash映射
+                    # Comprobar si hay que cambiar el mapeo de Flash
                     new_segment = read_bytes // segment_size
                     if new_segment != current_segment:
                         current_segment = new_segment
@@ -453,46 +453,46 @@ class BackupFlashWorker(QThread):
                             0 + mapping_offset, 1 + mapping_offset, 2 + mapping_offset, 3 + mapping_offset,
                             4 + mapping_offset, 5 + mapping_offset, 6 + mapping_offset, 7 + mapping_offset
                         ])
-                        self.log_signal.emit(self.device.port_name, f"切换映射到段 {current_segment}")
+                        self.log_signal.emit(self.device.port_name, f"Cambiando el mapeo al segmento {current_segment}")
                     
-                    # 计算当前段内的偏移
+                    # Calcular el desplazamiento dentro del segmento actual
                     offset_in_segment = read_bytes % segment_size
                     addr_word = offset_in_segment >> 1
                     
-                    # 计算本次读取长度
+                    # Calcular la longitud de esta lectura
                     remaining = total_size - read_bytes
                     chunk_size = min(read_chunk_size, remaining)
                     
-                    # 读取数据
+                    # Leer datos
                     data = device_adapter.readRom(addr_word, chunk_size)
                     f.write(data)
                     
                     read_bytes += chunk_size
                     
-                    # 更新进度(每1MB输出一次)
+                    # Actualizar progreso (registrar cada 1MB)
                     if read_bytes % (1024 * 1024) == 0 or read_bytes >= total_size:
                         progress = int(read_bytes / total_size * 100)
                         self.progress_signal.emit(self.device.port_name, progress)
                         self.log_signal.emit(self.device.port_name, 
-                            f"已备份 {read_bytes // (1024*1024)}MB / {total_size // (1024*1024)}MB ({progress}%)")
+                            f"Respaldados {read_bytes // (1024*1024)}MB / {total_size // (1024*1024)}MB ({progress}%)")
             
             if not self.running:
-                self.log_signal.emit(self.device.port_name, "备份已取消")
+                self.log_signal.emit(self.device.port_name, "Respaldo cancelado")
                 self.finished_signal.emit(self.device.port_name, False)
                 return
             
-            self.log_signal.emit(self.device.port_name, "备份完成 ✓")
+            self.log_signal.emit(self.device.port_name, "Respaldo completado ✓")
             self.progress_signal.emit(self.device.port_name, 100)
             self.finished_signal.emit(self.device.port_name, True)
             
         except Exception as e:
             traceback.print_exc()
-            self.log_signal.emit(self.device.port_name, f"备份失败: {e}")
+            self.log_signal.emit(self.device.port_name, f"Falló el respaldo: {e}")
             self.finished_signal.emit(self.device.port_name, False)
 
 
 class ProductionWorker(QThread):
-    """量产工作线程"""
+    """Hilo de trabajo de producción"""
     log_signal = Signal(str, str)  # (device_name, message)
     progress_signal = Signal(str, int)  # (device_name, progress)
     finished_signal = Signal(str, bool)  # (device_name, success)
@@ -504,43 +504,43 @@ class ProductionWorker(QThread):
         self.running = True
     
     def stop(self):
-        """停止线程"""
+        """Detener hilo"""
         self.running = False
     
     def run(self):
-        """执行量产流程"""
-        # 创建设备适配器
+        """Ejecutar el proceso de producción"""
+        # Crear el adaptador de dispositivo
         device_adapter = SuperChisDevice(self.device.serial)
         
         try:
-            self.log_signal.emit(self.device.port_name, "开始量产...")
+            self.log_signal.emit(self.device.port_name, "Iniciando producción...")
             
-            # 读取ROM文件
+            # Leer el archivo ROM
             with open(self.rom_file, 'rb') as f:
                 rom_data = f.read()
             
             file_size = len(rom_data)
-            self.log_signal.emit(self.device.port_name, f"ROM文件大小: {file_size} 字节")
+            self.log_signal.emit(self.device.port_name, f"Tamaño del archivo ROM: {file_size} bytes")
             
-            # 对齐到偶数
+            # Alinear a número par
             if file_size % 2 != 0:
                 rom_data += b'\x00'
                 file_size = len(rom_data)
             
-            # 切换到Flash模式
+            # Cambiar al modo Flash
             device_adapter.set_sc_mode(sdram=0, sd_enable=0, write_enable=1)
             device_adapter.set_flashmapping([0, 1, 2, 3, 4, 5, 6, 7])
             time.sleep(0.01)
             
-            # 获取CFI信息
+            # Obtener información CFI
             cfi_info = device_adapter.getRomCFI()
             sector_size = cfi_info['sector_size']
             buffer_size = cfi_info['buffer_write_bytes']
             
-            self.log_signal.emit(self.device.port_name, f"扇区大小: {sector_size} 字节, Buffer大小: {buffer_size} 字节")
+            self.log_signal.emit(self.device.port_name, f"Tamaño de sector: {sector_size} bytes, tamaño de buffer: {buffer_size} bytes")
             
-            # 检查Flash内容，找到第一个不一致的位置
-            self.log_signal.emit(self.device.port_name, "检查Flash内容...")
+            # Comprobar el contenido de Flash y hallar la primera diferencia
+            self.log_signal.emit(self.device.port_name, "Comprobando el contenido de Flash...")
             self.progress_signal.emit(self.device.port_name, 0)
             segment_size = 32 * 1024 * 1024
             check_chunk_size = 4096
@@ -550,7 +550,7 @@ class ProductionWorker(QThread):
             last_progress = 0
             
             while checked < file_size and self.running:
-                # 检查是否需要切换Flash映射
+                # Comprobar si hay que cambiar el mapeo de Flash
                 new_segment = checked // segment_size
                 if new_segment != current_segment:
                     current_segment = new_segment
@@ -560,25 +560,25 @@ class ProductionWorker(QThread):
                         4 + mapping_offset, 5 + mapping_offset, 6 + mapping_offset, 7 + mapping_offset
                     ])
                 
-                # 计算当前段内的偏移
+                # Calcular el desplazamiento dentro del segmento actual
                 offset_in_segment = checked % segment_size
                 addr_word = offset_in_segment >> 1
                 
-                # 计算本次检查长度
+                # Calcular la longitud de esta comprobación
                 length = min(check_chunk_size, file_size - checked)
                 expected = rom_data[checked:checked + length]
                 
-                # 读取并比较
+                # Leer y comparar
                 actual = device_adapter.readRom(addr_word, length)
                 if actual != expected:
                     first_diff_addr = checked
                     self.log_signal.emit(self.device.port_name, 
-                        f"发现不一致位置: 0x{first_diff_addr:08X} ({first_diff_addr // (1024*1024)}MB)")
+                        f"Diferencia encontrada en: 0x{first_diff_addr:08X} ({first_diff_addr // (1024*1024)}MB)")
                     break
                 
                 checked += length
                 
-                # 更新进度（每检查0.5MB或1MB输出一次日志）
+                # Actualizar progreso (registrar cada 0.5MB o 1MB comprobado)
                 progress = int(checked / file_size * 15)
                 if progress != last_progress:
                     self.progress_signal.emit(self.device.port_name, progress)
@@ -586,46 +586,46 @@ class ProductionWorker(QThread):
                 
                 if checked % (1024 * 1024) == 0:
                     self.log_signal.emit(self.device.port_name, 
-                        f"已检查 {checked // (1024*1024)}MB / {file_size // (1024*1024)}MB")
+                        f"Comprobados {checked // (1024*1024)}MB / {file_size // (1024*1024)}MB")
 
             
             if not self.running:
-                self.log_signal.emit(self.device.port_name, "量产已取消")
+                self.log_signal.emit(self.device.port_name, "Producción cancelada")
                 self.finished_signal.emit(self.device.port_name, False)
                 return
             
-            # 如果内容完全一致，直接完成
+            # Si el contenido es idéntico, terminar directamente
             if first_diff_addr is None:
-                self.log_signal.emit(self.device.port_name, "Flash内容与ROM文件完全一致，跳过写入 ✓")
+                self.log_signal.emit(self.device.port_name, "El contenido de Flash es idéntico a la ROM, se omite la escritura ✓")
                 self.progress_signal.emit(self.device.port_name, 100)
                 self.finished_signal.emit(self.device.port_name, True)
                 return
             
-            # 计算需要擦除的起始扇区（向下对齐到扇区边界）
+            # Calcular el sector inicial a borrar (alineado hacia abajo al límite de sector)
             start_sector = first_diff_addr // sector_size
             start_addr = start_sector * sector_size
             
             self.log_signal.emit(self.device.port_name, 
-                f"从地址 0x{start_addr:08X} 开始擦除写入...")
+                f"Desde la dirección 0x{start_addr:08X} se inicia el borrado y la escritura...")
             
-            # 擦除需要的扇区 - 需要处理32MB分段
+            # Borrar los sectores necesarios - hay que manejar segmentos de 32MB
             addr_end = file_size - 1
             total_sector_count = (addr_end // sector_size) + 1
             sector_count = total_sector_count - start_sector
             
             self.log_signal.emit(self.device.port_name, 
-                f"需要擦除 {sector_count} 个扇区 (从扇区 {start_sector}/{total_sector_count})...")
+                f"Hay que borrar {sector_count} sectores (desde el sector {start_sector}/{total_sector_count})...")
             
             current_segment = 0
             for i in range(start_sector, total_sector_count):
                 if not self.running:
-                    self.log_signal.emit(self.device.port_name, "擦除已取消")
+                    self.log_signal.emit(self.device.port_name, "Borrado cancelado")
                     self.finished_signal.emit(self.device.port_name, False)
                     return
                 
                 addr = i * sector_size
                 
-                # 检查是否需要切换Flash映射
+                # Comprobar si hay que cambiar el mapeo de Flash
                 new_segment = addr // segment_size
                 if new_segment != current_segment:
                     current_segment = new_segment
@@ -634,9 +634,9 @@ class ProductionWorker(QThread):
                         0 + mapping_offset, 1 + mapping_offset, 2 + mapping_offset, 3 + mapping_offset,
                         4 + mapping_offset, 5 + mapping_offset, 6 + mapping_offset, 7 + mapping_offset
                     ])
-                    self.log_signal.emit(self.device.port_name, f"切换映射到段 {current_segment} (映射偏移: {mapping_offset})")
+                    self.log_signal.emit(self.device.port_name, f"Cambiando el mapeo al segmento {current_segment} (desplazamiento de mapeo: {mapping_offset})")
                 
-                # 计算当前段内的偏移
+                # Calcular el desplazamiento dentro del segmento actual
                 offset_in_segment = addr % segment_size
                 device_adapter.eraseSector(offset_in_segment >> 1, sector_size >> 1)
                 
@@ -645,22 +645,22 @@ class ProductionWorker(QThread):
                 
                 if ((i - start_sector + 1) % 10 == 0) or ((i - start_sector + 1) == sector_count):
                     self.log_signal.emit(self.device.port_name, 
-                        f"已擦除 {i - start_sector + 1}/{sector_count} 扇区")
+                        f"Borrados {i - start_sector + 1}/{sector_count} sectores")
             
-            self.log_signal.emit(self.device.port_name, "擦除完成，开始写入...")
+            self.log_signal.emit(self.device.port_name, "Borrado completado, iniciando escritura...")
             
-            # 重新设置写使能模式和映射（擦除后可能需要重新设置）
+            # Reconfigurar el modo de escritura y el mapeo (puede ser necesario tras borrar)
             device_adapter.set_sc_mode(sdram=0, sd_enable=0, write_enable=1)
             device_adapter.set_flashmapping([0, 1, 2, 3, 4, 5, 6, 7])
             time.sleep(0.01)
             
-            # 写入数据 - 从start_addr开始，按32MB分段切换映射
+            # Escribir datos - desde start_addr, cambiando el mapeo por segmentos de 32MB
             write_chunk_size = 2048
             written = start_addr
             current_segment = 0
             
             while written < file_size and self.running:
-                # 检查是否需要切换Flash映射
+                # Comprobar si hay que cambiar el mapeo de Flash
                 new_segment = written // segment_size
                 if new_segment != current_segment:
                     current_segment = new_segment
@@ -669,46 +669,46 @@ class ProductionWorker(QThread):
                         0 + mapping_offset, 1 + mapping_offset, 2 + mapping_offset, 3 + mapping_offset,
                         4 + mapping_offset, 5 + mapping_offset, 6 + mapping_offset, 7 + mapping_offset
                     ])
-                    self.log_signal.emit(self.device.port_name, f"切换映射到段 {current_segment}")
+                    self.log_signal.emit(self.device.port_name, f"Cambiando el mapeo al segmento {current_segment}")
                 
-                # 计算当前段内的偏移地址
+                # Calcular la dirección de desplazamiento dentro del segmento actual
                 offset_in_segment = written % segment_size
                 
-                # 准备写入数据
+                # Preparar los datos a escribir
                 chunk = rom_data[written:written + write_chunk_size]
                 if len(chunk) < write_chunk_size:
                     chunk += b'\xff' * (write_chunk_size - len(chunk))
                 
-                # 使用字节地址调用programRom（0xf4命令使用字节地址）
+                # Llamar a programRom con dirección en bytes (el comando 0xf4 usa direcciones en bytes)
                 result = device_adapter.programRom(offset_in_segment, chunk, buffer_size)
                 if not result:
-                    raise Exception(f"写入失败于地址 0x{written:08X} (段{current_segment}, 偏移0x{offset_in_segment:08X})")
+                    raise Exception(f"Falló la escritura en la dirección 0x{written:08X} (segmento {current_segment}, desplazamiento 0x{offset_in_segment:08X})")
                 
                 written += write_chunk_size
                 
-                # 每写入64KB输出一次日志
+                # Registrar cada 64KB escritos
                 if written % (64 * 1024) == 0 or written >= file_size:
                     self.log_signal.emit(self.device.port_name, 
-                        f"已写入 {written}/{file_size} 字节 ({written*100//file_size}%)")
+                        f"Escritos {written}/{file_size} bytes ({written*100//file_size}%)")
                 
                 progress = 50 + int((written - start_addr) / (file_size - start_addr) * 40)
                 self.progress_signal.emit(self.device.port_name, progress)
             
             if not self.running:
-                self.log_signal.emit(self.device.port_name, "量产已取消")
+                self.log_signal.emit(self.device.port_name, "Producción cancelada")
                 self.finished_signal.emit(self.device.port_name, False)
                 return
             
-            self.log_signal.emit(self.device.port_name, "写入完成，开始校验...")
+            self.log_signal.emit(self.device.port_name, "Escritura completada, iniciando verificación...")
             
-            # 校验 - 从start_addr开始，同样需要处理32MB分段
-            device_adapter.set_flashmapping([0, 1, 2, 3, 4, 5, 6, 7])  # 重置映射到开始
+            # Verificación - desde start_addr, también con segmentos de 32MB
+            device_adapter.set_flashmapping([0, 1, 2, 3, 4, 5, 6, 7])  # reiniciar el mapeo al inicio
             verify_chunk_size = 4096
             verified = start_addr
             current_segment = 0
             
             while verified < file_size and self.running:
-                # 检查是否需要切换Flash映射
+                # Comprobar si hay que cambiar el mapeo de Flash
                 new_segment = verified // segment_size
                 if new_segment != current_segment:
                     current_segment = new_segment
@@ -718,40 +718,40 @@ class ProductionWorker(QThread):
                         4 + mapping_offset, 5 + mapping_offset, 6 + mapping_offset, 7 + mapping_offset
                     ])
                 
-                # 计算当前段内的偏移
+                # Calcular el desplazamiento dentro del segmento actual
                 offset_in_segment = verified % segment_size
                 addr_word = offset_in_segment >> 1
                 
-                # 计算本次校验长度
+                # Calcular la longitud de esta verificación
                 length = min(verify_chunk_size, file_size - verified)
                 expected = rom_data[verified:verified + length]
                 
-                # 读取并校验
+                # Leer y verificar
                 actual = device_adapter.readRom(addr_word, length)
                 if actual != expected:
-                    raise Exception(f"校验失败于地址 0x{verified:08X}")
+                    raise Exception(f"Falló la verificación en la dirección 0x{verified:08X}")
                 
                 verified += length
                 
-                # 每校验1MB输出一次日志
+                # Registrar cada 1MB verificado
                 if verified % (1024 * 1024) == 0 or verified >= file_size:
                     progress = 90 + int((verified - start_addr) / (file_size - start_addr) * 10)
                     self.progress_signal.emit(self.device.port_name, progress)
                     self.log_signal.emit(self.device.port_name, 
-                        f"已校验 {verified // (1024*1024)}MB / {file_size // (1024*1024)}MB")
+                        f"Verificados {verified // (1024*1024)}MB / {file_size // (1024*1024)}MB")
             
-            self.log_signal.emit(self.device.port_name, "量产完成 ✓")
+            self.log_signal.emit(self.device.port_name, "Producción completada ✓")
             self.progress_signal.emit(self.device.port_name, 100)
             self.finished_signal.emit(self.device.port_name, True)
             
         except Exception as e:
             traceback.print_exc()
-            self.log_signal.emit(self.device.port_name, f"量产失败: {e}")
+            self.log_signal.emit(self.device.port_name, f"Falló la producción: {e}")
             self.finished_signal.emit(self.device.port_name, False)
 
 
 class MainWindow(QMainWindow):
-    """主窗口"""
+    """Ventana principal"""
     
     def __init__(self):
         super().__init__()
@@ -763,54 +763,54 @@ class MainWindow(QMainWindow):
         
         self.init_ui()
         
-        # 启动设备扫描
+        # Iniciar el escaneo de dispositivos
         self.scanner = DeviceScanner()
         self.scanner.devices_found.connect(self.on_devices_found)
         self.scanner.start()
     
     def init_ui(self):
-        """初始化UI"""
-        self.setWindowTitle("SuperChis 自动量产工具 V2")
+        """Inicializar la interfaz"""
+        self.setWindowTitle("SuperChis Herramienta de Producción Automática V2")
         self.setGeometry(100, 100, 1400, 800)
         
-        # 主布局 - 使用分隔器
+        # Diseño principal - usando un divisor
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
         
-        # 创建分隔器
+        # Crear el divisor
         splitter = QSplitter(Qt.Horizontal)
         
-        # 左侧边栏 - 质检配置
+        # Barra lateral izquierda - control de calidad
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
         
-        # 质检配置组
-        config_group = QGroupBox("质检配置")
+        # Grupo de configuración de control de calidad
+        config_group = QGroupBox("Control de calidad")
         config_layout = QVBoxLayout()
         
         
-        self.check_ppb = QCheckBox("Flash PPB解锁")
+        self.check_ppb = QCheckBox("Desbloqueo PPB de Flash")
         self.check_ppb.setChecked(self.quality_config.enable_ppb_unlock)
         self.check_ppb.stateChanged.connect(self.on_ppb_changed)
 
-        self.check_sram_basic = QCheckBox("SRAM基础读写检测")
+        self.check_sram_basic = QCheckBox("Prueba básica de lectura/escritura SRAM")
         self.check_sram_basic.setChecked(self.quality_config.enable_sram_test)
         self.check_sram_basic.stateChanged.connect(self.on_sram_basic_changed)
         
-        self.check_sram_full = QCheckBox("SRAM全量检测(128KB)")
+        self.check_sram_full = QCheckBox("Prueba SRAM completa (128KB)")
         self.check_sram_full.setChecked(self.quality_config.enable_full_sram)
         self.check_sram_full.stateChanged.connect(self.on_sram_full_changed)
         
-        self.check_flash_erase = QCheckBox("Flash全片擦除查空")
+        self.check_flash_erase = QCheckBox("Borrado total de Flash y verificación")
         self.check_flash_erase.setChecked(self.quality_config.enable_flash_erase)
         self.check_flash_erase.stateChanged.connect(self.on_flash_erase_changed)
         
-        self.check_flash_fast = QCheckBox("Flash快速质检(16MB)")
+        self.check_flash_fast = QCheckBox("Control rápido de Flash (16MB)")
         self.check_flash_fast.setChecked(self.quality_config.enable_fast_flash)
         self.check_flash_fast.stateChanged.connect(self.on_flash_fast_changed)
         
-        self.check_ram_flash = QCheckBox("Backup Flash检测")
+        self.check_ram_flash = QCheckBox("Detección de Backup Flash")
         self.check_ram_flash.setChecked(self.quality_config.enable_ram_flash)
         self.check_ram_flash.stateChanged.connect(self.on_ram_flash_changed)
         
@@ -825,58 +825,58 @@ class MainWindow(QMainWindow):
         config_group.setLayout(config_layout)
         left_layout.addWidget(config_group)
         
-        # 质检说明
-        desc_group = QGroupBox("功能说明")
+        # Descripción del control de calidad
+        desc_group = QGroupBox("Descripción de funciones")
         desc_layout = QVBoxLayout()
         desc_text = QTextEdit()
         desc_text.setReadOnly(True)
         desc_text.setMaximumHeight(200)
         desc_text.setHtml("""
-        <b>SRAM基础：</b>快速测试SRAM Bank0前4字节<br>
-        <b>SRAM全量：</b>完整测试128KB SRAM<br>
-        <b>Flash全片擦除：</b>检查并擦除整个Flash<br>
-        <b>Flash快速质检：</b>仅擦除首尾4M+随机8M(共16MB)<br>
-        <b>PPB解锁：</b>解除Flash写保护<br>
-        <b>RAM Flash：</b>测试RAM接口访问Flash
+        <b>SRAM básica:</b> prueba rápida de los primeros 4 bytes del banco 0<br>
+        <b>SRAM completa:</b> prueba completa de los 128KB de SRAM<br>
+        <b>Borrado total de Flash:</b> comprueba y borra toda la Flash<br>
+        <b>Control rápido de Flash:</b> borra solo 4M iniciales y finales + 8M aleatorios (16MB)<br>
+        <b>Desbloqueo PPB:</b> quita la protección contra escritura de Flash<br>
+        <b>RAM Flash:</b> prueba el acceso a Flash por la interfaz RAM
         """)
         desc_layout.addWidget(desc_text)
         desc_group.setLayout(desc_layout)
         left_layout.addWidget(desc_group)
         
-        left_panel.setMaximumWidth(300)
+        left_panel.setMaximumWidth(340)
         
-        # 右侧主面板
+        # Panel principal derecho
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         
-        # 顶部控制区
-        control_group = QGroupBox("控制面板")
+        # Zona de control superior
+        control_group = QGroupBox("Panel de control")
         control_layout = QHBoxLayout()
         
-        # ROM文件选择
-        self.file_label = QLabel("未选择ROM文件")
-        self.select_file_btn = QPushButton("选择ROM文件")
+        # Selección de archivo ROM
+        self.file_label = QLabel("Ninguna ROM seleccionada")
+        self.select_file_btn = QPushButton("Elegir ROM")
         self.select_file_btn.clicked.connect(self.select_rom_file)
         
-        # 操作按钮
-        self.connect_all_btn = QPushButton("连接所有设备")
+        # Botones de acciones
+        self.connect_all_btn = QPushButton("Conectar todos")
         self.connect_all_btn.clicked.connect(self.connect_all_devices)
         
-        self.disconnect_all_btn = QPushButton("断开所有设备")
+        self.disconnect_all_btn = QPushButton("Desconectar todos")
         self.disconnect_all_btn.clicked.connect(self.disconnect_all_devices)
         
-        self.quality_check_btn = QPushButton("批量质检")
+        self.quality_check_btn = QPushButton("Control en lote")
         self.quality_check_btn.clicked.connect(self.start_quality_check_all)
         
-        self.production_btn = QPushButton("批量量产")
+        self.production_btn = QPushButton("Producción en lote")
         self.production_btn.clicked.connect(self.start_production_all)
         self.production_btn.setEnabled(False)
         
-        self.reset_nor_btn = QPushButton("重置NOR游戏")
+        self.reset_nor_btn = QPushButton("Reiniciar juegos NOR")
         self.reset_nor_btn.clicked.connect(self.start_reset_nor_all)
         self.reset_nor_btn.setStyleSheet("QPushButton { background-color: #FF6B6B; color: white; font-weight: bold; }")
         
-        self.backup_flash_btn = QPushButton("备份Flash")
+        self.backup_flash_btn = QPushButton("Respaldar Flash")
         self.backup_flash_btn.clicked.connect(self.start_backup_flash_all)
         self.backup_flash_btn.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }")
         
@@ -893,25 +893,25 @@ class MainWindow(QMainWindow):
         control_group.setLayout(control_layout)
         right_layout.addWidget(control_group)
         
-        # 设备列表
-        device_group = QGroupBox("设备列表")
+        # Lista de dispositivos
+        device_group = QGroupBox("Lista de dispositivos")
         device_layout = QVBoxLayout()
         
         self.device_table = QTableWidget()
         self.device_table.setColumnCount(5)
-        self.device_table.setHorizontalHeaderLabels(["端口", "状态", "进度", "操作", "日志"])
+        self.device_table.setHorizontalHeaderLabels(["Puerto", "Estado", "Progreso", "Acciones", "Registro"])
         self.device_table.setColumnWidth(0, 120)
-        self.device_table.setColumnWidth(1, 80)
+        self.device_table.setColumnWidth(1, 140)
         self.device_table.setColumnWidth(2, 160)
-        self.device_table.setColumnWidth(3, 350)
+        self.device_table.setColumnWidth(3, 660)
         self.device_table.setColumnWidth(4, 450)
         
         device_layout.addWidget(self.device_table)
         device_group.setLayout(device_layout)
         right_layout.addWidget(device_group)
         
-        # 全局日志
-        log_group = QGroupBox("全局日志")
+        # Registro global
+        log_group = QGroupBox("Registro global")
         log_layout = QVBoxLayout()
         
         self.global_log = QTextEdit()
@@ -922,7 +922,7 @@ class MainWindow(QMainWindow):
         log_group.setLayout(log_layout)
         right_layout.addWidget(log_group)
         
-        # 添加到分隔器
+        # Añadir al divisor
         splitter.addWidget(left_panel)
         splitter.addWidget(right_panel)
         splitter.setStretchFactor(0, 0)
@@ -931,78 +931,78 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(splitter)
     
     def on_sram_basic_changed(self, state):
-        """SRAM基础测试选项变更"""
+        """Cambio de la opción de prueba básica de SRAM"""
         self.quality_config.enable_sram_test = (state == Qt.CheckState.Checked.value)
-        self.log_global(f"SRAM基础测试: {'启用' if self.quality_config.enable_sram_test else '禁用'}")
+        self.log_global(f"Prueba básica de SRAM: {'activado' if self.quality_config.enable_sram_test else 'desactivado'}")
     
     def on_sram_full_changed(self, state):
-        """SRAM全量测试选项变更"""
+        """Cambio de la opción de prueba completa de SRAM"""
         self.quality_config.enable_full_sram = (state == Qt.CheckState.Checked.value)
-        self.log_global(f"SRAM全量测试: {'启用' if self.quality_config.enable_full_sram else '禁用'}")
+        self.log_global(f"Prueba completa de SRAM: {'activado' if self.quality_config.enable_full_sram else 'desactivado'}")
     
     def on_flash_erase_changed(self, state):
-        """Flash擦除选项变更"""
+        """Cambio de la opción de borrado de Flash"""
         self.quality_config.enable_flash_erase = (state == Qt.CheckState.Checked.value)
         if self.quality_config.enable_flash_erase:
             self.quality_config.enable_fast_flash = False
             self.check_flash_fast.setChecked(False)
-        self.log_global(f"Flash全片擦除: {'启用' if self.quality_config.enable_flash_erase else '禁用'}")
+        self.log_global(f"Borrado total de Flash: {'activado' if self.quality_config.enable_flash_erase else 'desactivado'}")
     
     def on_flash_fast_changed(self, state):
-        """Flash快速质检选项变更"""
+        """Cambio de la opción de control rápido de Flash"""
         self.quality_config.enable_fast_flash = (state == Qt.CheckState.Checked.value)
         if self.quality_config.enable_fast_flash:
             self.quality_config.enable_flash_erase = False
             self.check_flash_erase.setChecked(False)
-        self.log_global(f"Flash快速质检: {'启用' if self.quality_config.enable_fast_flash else '禁用'}")
+        self.log_global(f"Control rápido de Flash: {'activado' if self.quality_config.enable_fast_flash else 'desactivado'}")
     
     def on_ppb_changed(self, state):
-        """PPB解锁选项变更"""
+        """Cambio de la opción de desbloqueo PPB"""
         self.quality_config.enable_ppb_unlock = (state == Qt.CheckState.Checked.value)
-        self.log_global(f"PPB解锁: {'启用' if self.quality_config.enable_ppb_unlock else '禁用'}")
+        self.log_global(f"Desbloqueo PPB: {'activado' if self.quality_config.enable_ppb_unlock else 'desactivado'}")
     
     def on_ram_flash_changed(self, state):
-        """Backup Flash检测选项变更"""
+        """Cambio de la opción de detección de Backup Flash"""
         self.quality_config.enable_ram_flash = (state == Qt.CheckState.Checked.value)
-        self.log_global(f"Backup Flash检测: {'启用' if self.quality_config.enable_ram_flash else '禁用'}")
+        self.log_global(f"Detección de Backup Flash: {'activado' if self.quality_config.enable_ram_flash else 'desactivado'}")
     
     def select_rom_file(self):
-        """选择ROM文件"""
-        file_name, _ = QFileDialog.getOpenFileName( #gba或者bin格式
-            self, "选择ROM文件", "", "ROM Files (*.gba *.bin);;All Files (*)"
+        """Elegir archivo ROM"""
+        file_name, _ = QFileDialog.getOpenFileName( #formato gba o bin
+            self, "Elegir archivo ROM", "", "ROM Files (*.gba *.bin);;All Files (*)"
         )
         
         if file_name:
             self.rom_file = file_name
-            self.file_label.setText(f"已选择: {Path(file_name).name}")
+            self.file_label.setText(f"Seleccionado: {Path(file_name).name}")
             self.production_btn.setEnabled(True)
-            self.log_global(f"已选择ROM文件: {file_name}")
+            self.log_global(f"ROM seleccionada: {file_name}")
     
     def on_devices_found(self, ports: List[str]):
-        """设备扫描回调"""
-        # 移除已断开的设备
+        """Callback del escaneo de dispositivos"""
+        # Quitar los dispositivos desconectados
         removed_ports = [p for p in self.devices.keys() if p not in ports]
         for port in removed_ports:
             self.devices[port].disconnect()
             del self.devices[port]
         
-        # 添加新设备
+        # Añadir dispositivos nuevos
         new_device_added = False
         for port in ports:
             if port not in self.devices:
                 self.devices[port] = DeviceInfo(port)
-                self.log_global(f"发现新设备: {port}")
+                self.log_global(f"Dispositivo nuevo encontrado: {port}")
                 new_device_added = True
         
-        # 当设备列表变化时，需要完全重建表格
+        # Cuando cambia la lista de dispositivos hay que reconstruir la tabla por completo
         self.update_device_table(full_rebuild=(len(removed_ports) > 0 or new_device_added))
     
     def update_device_table(self, full_rebuild=False):
-        """更新设备表格
+        """Actualizar la tabla de dispositivos
         Args:
-            full_rebuild: 是否完全重建表格（包括widget）
+            full_rebuild: si se reconstruye la tabla por completo (incluidos los widgets)
         """
-        # 记录当前进度条的值
+        # Guardar el valor actual de las barras de progreso
         progress_values = {}
         if not full_rebuild:
             for row in range(self.device_table.rowCount()):
@@ -1016,49 +1016,49 @@ class MainWindow(QMainWindow):
         self.device_table.setRowCount(len(self.devices))
         
         for row, (port, device) in enumerate(self.devices.items()):
-            # 端口
+            # Puerto
             self.device_table.setItem(row, 0, QTableWidgetItem(port))
             
-            # 状态
+            # Estado
             status_item = QTableWidgetItem(device.status)
-            if "已连接" in device.status:
+            if "Conectado" in device.status:
                 status_item.setBackground(QColor(144, 238, 144))
-            elif "失败" in device.status:
+            elif "fallida" in device.status:
                 status_item.setBackground(QColor(255, 182, 193))
             self.device_table.setItem(row, 1, status_item)
             
-            # 进度条 - 只在必要时重新创建
+            # Barra de progreso - solo se recrea cuando es necesario
             if full_rebuild or self.device_table.cellWidget(row, 2) is None:
                 progress_bar = QProgressBar()
                 progress_bar.setMinimum(0)
                 progress_bar.setMaximum(100)
-                # 恢复之前的进度值
+                # Restaurar el valor de progreso anterior
                 progress_bar.setValue(progress_values.get(port, 0))
                 self.device_table.setCellWidget(row, 2, progress_bar)
             
-            # 操作按钮 - 只在必要时重新创建（每个按钮都绑定到具体的port）
+            # Botones de acciones - solo se recrean cuando es necesario (cada botón está ligado a un puerto concreto)
             if full_rebuild or self.device_table.cellWidget(row, 3) is None:
                 button_widget = QWidget()
                 button_layout = QHBoxLayout(button_widget)
                 button_layout.setContentsMargins(2, 2, 2, 2)
                 
-                connect_btn = QPushButton("连接")
+                connect_btn = QPushButton("Conectar")
                 connect_btn.clicked.connect(lambda checked, p=port: self.connect_device(p))
                 
-                disconnect_btn = QPushButton("断开")
+                disconnect_btn = QPushButton("Desconectar")
                 disconnect_btn.clicked.connect(lambda checked, p=port: self.disconnect_device(p))
                 
-                quality_btn = QPushButton("质检")
+                quality_btn = QPushButton("Control")
                 quality_btn.clicked.connect(lambda checked, p=port: self.start_quality_check(p))
                 
-                production_btn = QPushButton("量产")
+                production_btn = QPushButton("Producir")
                 production_btn.clicked.connect(lambda checked, p=port: self.start_production(p))
                 
-                reset_nor_btn = QPushButton("重置NOR")
+                reset_nor_btn = QPushButton("Reset NOR")
                 reset_nor_btn.clicked.connect(lambda checked, p=port: self.start_reset_nor(p))
                 reset_nor_btn.setStyleSheet("background-color: #FF6B6B; color: white;")
                 
-                backup_btn = QPushButton("备份")
+                backup_btn = QPushButton("Respaldo")
                 backup_btn.clicked.connect(lambda checked, p=port: self.start_backup_flash(p))
                 backup_btn.setStyleSheet("background-color: #4CAF50; color: white;")
                 
@@ -1071,46 +1071,46 @@ class MainWindow(QMainWindow):
                 
                 self.device_table.setCellWidget(row, 3, button_widget)
             
-            # 日志（使用最后操作）
+            # Registro (usa la última operación)
             self.device_table.setItem(row, 4, QTableWidgetItem(device.last_operation))
     
     def connect_device(self, port: str):
-        """连接单个设备"""
+        """Conectar un solo dispositivo"""
         device = self.devices.get(port)
         if device:
             if device.connect():
-                self.log_global(f"{port} 连接成功")
+                self.log_global(f"{port} conexión exitosa")
             else:
-                self.log_global(f"{port} 连接失败")
+                self.log_global(f"{port} Conexión fallida")
             self.update_device_table()
     
     def disconnect_device(self, port: str):
-        """断开单个设备"""
+        """Desconectar un solo dispositivo"""
         device = self.devices.get(port)
         if device:
             device.disconnect()
-            self.log_global(f"{port} 已断开")
+            self.log_global(f"{port} desconectado")
             self.update_device_table()
     
     def connect_all_devices(self):
-        """连接所有设备"""
+        """Conectar todos"""
         for port, device in self.devices.items():
             if not device.is_connected():
                 self.connect_device(port)
     
     def disconnect_all_devices(self):
-        """断开所有设备"""
+        """Desconectar todos"""
         for port in list(self.devices.keys()):
             self.disconnect_device(port)
     
     def start_quality_check(self, port: str):
-        """开始单个设备质检"""
+        """Iniciar el control de calidad de un dispositivo"""
         device = self.devices.get(port)
         if not device or not device.is_connected():
-            QMessageBox.warning(self, "警告", f"{port} 未连接")
+            QMessageBox.warning(self, "Advertencia", f"{port} no está conectado")
             return
         
-        # 如果已有工作线程在运行,先停止它
+        # Si ya hay un hilo de trabajo en ejecución, detenerlo primero
         if port in self.workers and self.workers[port].isRunning():
             self.workers[port].stop()
             self.workers[port].wait(1000)
@@ -1119,33 +1119,33 @@ class MainWindow(QMainWindow):
         worker.log_signal.connect(self.on_worker_log)
         worker.progress_signal.connect(self.on_worker_progress)
         worker.finished_signal.connect(self.on_worker_finished)
-        # 确保线程完成时会触发清理
+        # Asegurar que la limpieza se dispare cuando termine el hilo
         worker.finished.connect(lambda: self.cleanup_worker(port))
         
         self.workers[port] = worker
         worker.start()
     
     def start_quality_check_all(self):
-        """批量质检"""
+        """Control en lote"""
         delay = 0
         for port, device in self.devices.items():
             if device.is_connected():
-                # 使用QTimer添加随机延迟，避免USB供电不足
+                # Usar QTimer para añadir un retraso aleatorio y evitar falta de alimentación USB
                 QTimer.singleShot(int(delay * 1000), lambda p=port: self.start_quality_check(p))
-                delay += random.uniform(0.5, 1.0)  # 每个设备间隔0.5-1秒
+                delay += random.uniform(0.5, 1.0)  # 0.5-1 s entre dispositivos
     
     def start_production(self, port: str):
-        """开始单个设备量产"""
+        """Iniciar la producción de un dispositivo"""
         if not self.rom_file:
-            QMessageBox.warning(self, "警告", "请先选择ROM文件")
+            QMessageBox.warning(self, "Advertencia", "Primero elija un archivo ROM")
             return
         
         device = self.devices.get(port)
         if not device or not device.is_connected():
-            QMessageBox.warning(self, "警告", f"{port} 未连接")
+            QMessageBox.warning(self, "Advertencia", f"{port} no está conectado")
             return
         
-        # 如果已有工作线程在运行,先停止它
+        # Si ya hay un hilo de trabajo en ejecución, detenerlo primero
         if port in self.workers and self.workers[port].isRunning():
             self.workers[port].stop()
             self.workers[port].wait(1000)
@@ -1154,36 +1154,36 @@ class MainWindow(QMainWindow):
         worker.log_signal.connect(self.on_worker_log)
         worker.progress_signal.connect(self.on_worker_progress)
         worker.finished_signal.connect(self.on_worker_finished)
-        # 确保线程完成时会触发清理
+        # Asegurar que la limpieza se dispare cuando termine el hilo
         worker.finished.connect(lambda: self.cleanup_worker(port))
         
         self.workers[port] = worker
         worker.start()
     
     def start_production_all(self):
-        """批量量产"""
+        """Producción en lote"""
         if not self.rom_file:
-            QMessageBox.warning(self, "警告", "请先选择ROM文件")
+            QMessageBox.warning(self, "Advertencia", "Primero elija un archivo ROM")
             return
         
         delay = 0
         for port, device in self.devices.items():
             if device.is_connected():
-                # 使用QTimer添加随机延迟，避免USB供电不足
+                # Usar QTimer para añadir un retraso aleatorio y evitar falta de alimentación USB
                 QTimer.singleShot(int(delay * 1000), lambda p=port: self.start_production(p))
-                delay += random.uniform(0.5, 1.0)  # 每个设备间隔0.5-1秒
+                delay += random.uniform(0.5, 1.0)  # 0.5-1 s entre dispositivos
     
     def start_reset_nor(self, port: str):
-        """开始单个设备重置NOR游戏"""
+        """Iniciar el reinicio de juegos NOR de un dispositivo"""
         device = self.devices.get(port)
         if not device or not device.is_connected():
-            QMessageBox.warning(self, "警告", f"{port} 未连接")
+            QMessageBox.warning(self, "Advertencia", f"{port} no está conectado")
             return
         
-        # 确认操作
+        # Confirmar operación
         reply = QMessageBox.question(
-            self, "确认操作",
-            f"确定要重置 {port} 的NOR游戏吗?\n\n这将擦除Flash元数据区域(2MB),操作不可逆!",
+            self, "Confirmar operación",
+            f"¿Seguro que desea reiniciar los juegos NOR de {port}?\n\nSe borrará la zona de metadatos de Flash (2MB). ¡La operación es irreversible!",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
@@ -1191,7 +1191,7 @@ class MainWindow(QMainWindow):
         if reply != QMessageBox.Yes:
             return
         
-        # 如果已有工作线程在运行,先停止它
+        # Si ya hay un hilo de trabajo en ejecución, detenerlo primero
         if port in self.workers and self.workers[port].isRunning():
             self.workers[port].stop()
             self.workers[port].wait(1000)
@@ -1206,11 +1206,11 @@ class MainWindow(QMainWindow):
         worker.start()
     
     def start_reset_nor_all(self):
-        """批量重置NOR游戏"""
-        # 确认操作
+        """Reinicio en lote de juegos NOR"""
+        # Confirmar operación
         reply = QMessageBox.question(
-            self, "确认操作",
-            f"确定要对所有已连接设备重置NOR游戏吗?\n\n这将擦除所有设备的Flash元数据区域(2MB),操作不可逆!",
+            self, "Confirmar operación",
+            f"¿Seguro que desea reiniciar los juegos NOR de todos los dispositivos conectados?\n\nSe borrará la zona de metadatos de Flash (2MB) de todos los dispositivos. ¡La operación es irreversible!",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
@@ -1220,7 +1220,7 @@ class MainWindow(QMainWindow):
         
         for port, device in self.devices.items():
             if device.is_connected():
-                # 跳过确认对话框,直接执行
+                # Omitir el diálogo de confirmación y ejecutar directamente
                 if port in self.workers and self.workers[port].isRunning():
                     self.workers[port].stop()
                     self.workers[port].wait(1000)
@@ -1235,22 +1235,22 @@ class MainWindow(QMainWindow):
                 worker.start()
     
     def start_backup_flash(self, port: str):
-        """开始单个设备备份Flash"""
+        """Iniciar el respaldo de Flash de un dispositivo"""
         device = self.devices.get(port)
         if not device or not device.is_connected():
-            QMessageBox.warning(self, "警告", f"{port} 未连接")
+            QMessageBox.warning(self, "Advertencia", f"{port} no está conectado")
             return
         
-        # 选择保存文件
+        # Elegir el archivo de destino
         default_name = f"flash_backup_{port.replace('/', '_')}_{time.strftime('%Y%m%d_%H%M%S')}.bin"
         backup_file, _ = QFileDialog.getSaveFileName(
-            self, "保存Flash备份", default_name, "Binary Files (*.bin);;All Files (*)"
+            self, "Guardar respaldo de Flash", default_name, "Binary Files (*.bin);;All Files (*)"
         )
         
         if not backup_file:
             return
         
-        # 如果已有工作线程在运行,先停止它
+        # Si ya hay un hilo de trabajo en ejecución, detenerlo primero
         if port in self.workers and self.workers[port].isRunning():
             self.workers[port].stop()
             self.workers[port].wait(1000)
@@ -1265,10 +1265,10 @@ class MainWindow(QMainWindow):
         worker.start()
     
     def start_backup_flash_all(self):
-        """批量备份Flash"""
-        # 选择保存目录
+        """Respaldo de Flash en lote"""
+        # Elegir el directorio de destino
         backup_dir = QFileDialog.getExistingDirectory(
-            self, "选择备份保存目录", "",
+            self, "Elegir directorio para los respaldos", "",
             QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
         )
         
@@ -1279,11 +1279,11 @@ class MainWindow(QMainWindow):
         
         for port, device in self.devices.items():
             if device.is_connected():
-                # 为每个设备生成备份文件名
+                # Generar el nombre del archivo de respaldo para cada dispositivo
                 safe_port = port.replace('/', '_').replace('\\', '_')
                 backup_file = os.path.join(backup_dir, f"flash_backup_{safe_port}_{timestamp}.bin")
                 
-                # 如果已有工作线程在运行,先停止它
+                # Si ya hay un hilo de trabajo en ejecución, detenerlo primero
                 if port in self.workers and self.workers[port].isRunning():
                     self.workers[port].stop()
                     self.workers[port].wait(1000)
@@ -1297,14 +1297,14 @@ class MainWindow(QMainWindow):
                 self.workers[port] = worker
                 worker.start()
                 
-                self.log_global(f"开始备份 {port} 到 {backup_file}")
+                self.log_global(f"Iniciando respaldo de {port} en {backup_file}")
     
     def on_worker_log(self, port: str, message: str):
-        """工作线程日志回调"""
+        """Callback de registro del hilo de trabajo"""
         device = self.devices.get(port)
         if device:
             device.last_operation = message
-            # 仅更新文本内容，不重建widget
+            # Solo actualizar el texto, sin reconstruir el widget
             for row in range(self.device_table.rowCount()):
                 if self.device_table.item(row, 0).text() == port:
                     self.device_table.setItem(row, 4, QTableWidgetItem(message))
@@ -1313,7 +1313,7 @@ class MainWindow(QMainWindow):
         self.log_global(f"[{port}] {message}")
     
     def on_worker_progress(self, port: str, progress: int):
-        """工作线程进度回调"""
+        """Callback de progreso del hilo de trabajo"""
         for row in range(self.device_table.rowCount()):
             if self.device_table.item(row, 0).text() == port:
                 progress_bar = self.device_table.cellWidget(row, 2)
@@ -1322,29 +1322,29 @@ class MainWindow(QMainWindow):
                 break
     
     def on_worker_finished(self, port: str, success: bool):
-        """工作线程完成回调"""
+        """Callback de finalización del hilo de trabajo"""
         device = self.devices.get(port)
         if device:
             if success:
-                device.status = "操作成功"
+                device.status = "Operación exitosa"
             else:
-                device.status = "操作失败"
+                device.status = "Operación fallida"
                 device.error_count += 1
             self.update_device_table()
     
     def cleanup_worker(self, port: str):
-        """清理完成的工作线程"""
+        """Limpiar los hilos de trabajo terminados"""
         if port in self.workers:
             worker = self.workers[port]
-            # 确保线程已经完成
+            # Asegurar que el hilo ya terminó
             if worker.isRunning():
-                worker.wait(2000)  # 等待最多2秒
+                worker.wait(2000)  # esperar como máximo 2 s
                 if worker.isRunning():
-                    # 如果还在运行，强制停止
+                    # Si sigue en ejecución, forzar la detención
                     worker.stop()
                     worker.wait(1000)
             
-            # 断开所有信号连接
+            # Desconectar todas las señales
             try:
                 worker.log_signal.disconnect()
                 worker.progress_signal.disconnect()
@@ -1353,23 +1353,23 @@ class MainWindow(QMainWindow):
             except:
                 pass
             
-            # 使用deleteLater安全删除，而不是直接del
-            # 这样Qt会在适当的时机删除对象，避免在线程运行时析构
+            # Usar deleteLater para borrar de forma segura en lugar de del directo
+            # Así Qt elimina el objeto en el momento adecuado y evita destruirlo mientras el hilo corre
             worker.deleteLater()
             
-            # 从字典中移除引用
+            # Quitar la referencia del diccionario
             del self.workers[port]
     
     def log_global(self, message: str):
-        """全局日志"""
+        """Registro global"""
         timestamp = time.strftime("%H:%M:%S")
         self.global_log.append(f"[{timestamp}] {message}")
     
     def closeEvent(self, event):
-        """关闭窗口"""
-        self.log_global("正在关闭程序...")
+        """Cerrar la ventana"""
+        self.log_global("Cerrando el programa...")
         
-        # 停止扫描线程
+        # Detener el hilo de escaneo
         if hasattr(self, 'scanner') and self.scanner:
             if self.scanner.isRunning():
                 self.scanner.stop()
@@ -1379,33 +1379,33 @@ class MainWindow(QMainWindow):
                     self.scanner.wait(1000)
             self.scanner.deleteLater()
         
-        # 停止所有工作线程
+        # Detener todos los hilos de trabajo
         for port, worker in list(self.workers.items()):
             if worker.isRunning():
                 worker.stop()
-                worker.wait(3000)  # 等待最多3秒
+                worker.wait(3000)  # esperar como máximo 3 s
                 if worker.isRunning():
-                    self.log_global(f"强制终止 {port} 的线程")
+                    self.log_global(f"Forzando el cierre del hilo de {port}")
                     worker.terminate()
                     worker.wait(1000)
             
-            # 使用deleteLater安全删除
+            # Usar deleteLater para borrar de forma segura
             worker.deleteLater()
         
-        # 清空工作线程字典
+        # Vaciar el diccionario de hilos de trabajo
         self.workers.clear()
         
-        # 断开所有设备
+        # Desconectar todos
         for device in self.devices.values():
             if device.is_connected():
                 device.disconnect()
         
-        self.log_global("程序已关闭")
+        self.log_global("Programa cerrado")
         event.accept()
 
 
 def main():
-    """主函数"""
+    """Función principal"""
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()

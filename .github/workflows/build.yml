@@ -1,0 +1,29 @@
+name: Build ejecutables
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt pyinstaller
+      - run: pyinstaller --noconfirm chismaker.spec
+      - name: Comprimir app de macOS
+        if: runner.os == 'macOS'
+        run: cd dist && zip -r -y chismaker-macos.zip "SuperChis Chismaker.app"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chismaker-${{ runner.os }}
+          path: |
+            dist/chismaker.exe
+            dist/chismaker-macos.zip
