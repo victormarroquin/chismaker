@@ -1,8 +1,8 @@
 [English](README.md) | **Español** | [中文](README.zh.md)
 
-# SuperChis – Herramienta de Producción Automática
+# SuperChis – Herramienta de Grabación Automática
 
-Aplicación de escritorio (Python + PySide6) para producir cartuchos de Game Boy Advance en lote con grabadores SuperChis.
+Aplicación de escritorio (Python + PySide6) para grabar cartuchos de Game Boy Advance en lote con grabadores SuperChis.
 
 ## Características
 
@@ -19,7 +19,7 @@ Aplicación de escritorio (Python + PySide6) para producir cartuchos de Game Boy
 - ✅ **Borrado / verificación de Flash vacía** – borra automáticamente si la Flash no está vacía
 - ✅ **Desbloqueo PPB de Flash** – comprueba y libera los bits de protección PPB
 
-### 3. Producción automática
+### 3. Grabación automática
 - ✅ Elección del archivo ROM (`.gba`)
 - ✅ Compara los primeros 4K de la Flash y escribe solo si los datos difieren
 - ✅ Borrado automático de sectores
@@ -53,7 +53,7 @@ Al iniciar podés elegir el idioma de la interfaz y, si querés, recordarlo. Par
 
 1. **Conectar dispositivos** – la app escanea los puertos USB y lista los SuperChis. Pulsá "Conectar todos" o conectá cada uno por separado.
 2. **Control de calidad (opcional pero recomendado)** – ejecutá el control en lote o en un solo dispositivo y verificá que todo pase.
-3. **Producción** – elegí un archivo `.gba` y ejecutá la producción en lote o en un dispositivo.
+3. **Grabar** – elegí un archivo `.gba` y ejecutá la grabación en lote o en un solo dispositivo.
 4. **Seguimiento** – cada dispositivo tiene su barra de progreso; el registro muestra los detalles.
 
 ## Crear ejecutables independientes
@@ -91,7 +91,7 @@ Bits de configuración:
 ### Arquitectura de hilos
 - `DeviceScanner` – escaneo de dispositivos en segundo plano
 - `QualityCheckWorker` – control de calidad
-- `ProductionWorker` – producción
+- `ProductionWorker` – grabación
 
 Cada dispositivo trabaja en su propio hilo, así que las operaciones no se interfieren.
 
@@ -99,7 +99,7 @@ Cada dispositivo trabaja en su propio hilo, así que las operaciones no se inter
 
 - **Dispositivo no detectado:** revisá el cable USB, confirmá que el VID:PID sea `0x0483:0x0721` y volvé a conectarlo.
 - **Falla el control de calidad:** SDRAM → revisá las conexiones; SRAM → revisá el chip; borrado de Flash → probá desbloquear el PPB a mano; desbloqueo PPB → revisá el modelo del chip Flash.
-- **Falla la producción:** asegurate de que el control de calidad pasó, verificá el archivo ROM y leé el registro detallado.
+- **Falla la grabación:** asegurate de que el control de calidad pasó, verificá el archivo ROM y leé el registro detallado.
 
 ## Chips Flash compatibles
 
@@ -110,7 +110,7 @@ Chips compatibles con CFI, entre ellos S29GL256 (Spansion), JS28F256 (Intel), S2
 - [ ] Soporte para cartuchos GBC
 - [ ] Respaldo / restauración de partidas guardadas
 - [ ] Identificación automática del cartucho
-- [ ] Informe estadístico de producción
+- [ ] Informe estadístico de grabaciones
 - [ ] Guardar / cargar configuración
 
 ## Licencia
