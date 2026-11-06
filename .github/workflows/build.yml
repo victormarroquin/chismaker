@@ -18,12 +18,38 @@ jobs:
           python-version: '3.12'
       - run: pip install -r requirements.txt pyinstaller
       - run: pyinstaller --noconfirm chismaker.spec
-      - name: Comprimir app de macOS
+      - name: Empaquetar (macOS)
         if: runner.os == 'macOS'
         run: cd dist && zip -r -y chismaker-macos.zip "SuperChis Chismaker.app"
+      - name: Renombrar (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: mv dist/chismaker.exe dist/chismaker-windows.exe
       - uses: actions/upload-artifact@v4
         with:
           name: chismaker-${{ runner.os }}
           path: |
-            dist/chismaker.exe
+            dist/chismaker-windows.exe
             dist/chismaker-macos.zip
+
+  release:
+    # Solo al subir un tag v*: publica los ejecutables como assets de la release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Crear release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" assets/* \
+            --repo "${{ github.repository }}" \
+            --title "${{ github.ref_name }}" \
+            --notes-file RELEASE_NOTES.md
