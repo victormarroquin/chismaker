@@ -14,6 +14,7 @@ import struct
 import threading
 import traceback
 import random
+import tempfile
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -23,7 +24,7 @@ from PySide6.QtWidgets import (
     QProgressBar, QTextEdit, QGroupBox, QCheckBox, QSpinBox, QMessageBox,
     QSplitter
 )
-from PySide6.QtCore import Qt, QThread, Signal, QTimer
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QSettings
 from PySide6.QtGui import QColor
 
 import serial.tools.list_ports
@@ -32,6 +33,7 @@ import serial
 # 导入设备适配器
 from device_adapter import SuperChisDevice
 from i18n import tr, init_language, reset_saved_language
+import savepatch
 
 
 # 质检配置类
@@ -899,6 +901,13 @@ class MainWindow(QMainWindow):
         desc_group.setLayout(desc_layout)
         left_layout.addWidget(desc_group)
         
+        # 存档补丁: 选择ROM时自动把SRAM/EEPROM存档转换为Flash存档
+        self.check_save_patch = QCheckBox(tr("选择ROM时自动打存档补丁(SRAM/EEPROM→Flash)"))
+        self.check_save_patch.setChecked(QSettings("chismaker", "chismaker").value("auto_save_patch", True, type=bool))
+        self.check_save_patch.toggled.connect(
+            lambda on: QSettings("chismaker", "chismaker").setValue("auto_save_patch", on))
+        left_layout.addWidget(self.check_save_patch)
+
         # Cambiar idioma (se aplica al reiniciar)
         lang_btn = QPushButton("Language / 语言 / Idioma")
         lang_btn.clicked.connect(self.change_language)
@@ -1034,10 +1043,49 @@ class MainWindow(QMainWindow):
         )
         
         if file_name:
-            self.rom_file = file_name
-            self.file_label.setText(tr(f"已选择: {Path(file_name).name}"))
-            self.production_btn.setEnabled(True)
             self.log_global(f"已选择ROM文件: {file_name}")
+            rom_path, patched = self.apply_save_patch(file_name)
+            self.rom_file = rom_path
+            suffix = "（已打存档补丁）" if patched else ""
+            self.file_label.setText(tr(f"已选择: {Path(rom_path).name}{suffix}"))
+            self.production_btn.setEnabled(True)
+
+    def apply_save_patch(self, file_name: str):
+        """检测ROM存档类型,必要时生成打过Flash存档补丁的新ROM。返回 (用于量产的ROM路径, 是否已打补丁)"""
+        try:
+            with open(file_name, 'rb') as f:
+                data = f.read()
+            save_type = savepatch.detect_save_type(data)
+            self.log_global(f"检测到存档类型: {save_type}")
+            if save_type == "NONE":
+                self.log_global("未检测到存档类型，不打补丁")
+                return file_name, False
+            if not savepatch.needs_flash_patch(save_type):
+                self.log_global("该游戏无需存档补丁(已使用Flash存档)")
+                return file_name, False
+            if savepatch.is_patched(data):
+                self.log_global("该ROM已打过存档补丁，无需再次打补丁")
+                return file_name, True
+            if not self.check_save_patch.isChecked():
+                self.log_global("自动存档补丁已关闭，使用原始ROM")
+                return file_name, False
+
+            self.log_global("该游戏使用SRAM/EEPROM存档，正在打Flash存档补丁...")
+            patched, hooks = savepatch.patch_rom(data)
+            out_path = os.path.splitext(file_name)[0] + "_flash512.gba"
+            try:
+                with open(out_path, 'wb') as f:
+                    f.write(patched)
+            except OSError:
+                # 原目录不可写时放到临时目录
+                out_path = os.path.join(tempfile.gettempdir(), os.path.basename(out_path))
+                with open(out_path, 'wb') as f:
+                    f.write(patched)
+            self.log_global(f"存档补丁完成(已挂钩 {hooks} 处)，新ROM: {out_path}")
+            return out_path, True
+        except Exception as e:
+            self.log_global(f"存档补丁失败: {e}，使用原始ROM(该游戏可能无法存档)")
+            return file_name, False
     
     def on_devices_found(self, ports: List[str]):
         """设备扫描回调"""
