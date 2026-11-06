@@ -36,6 +36,11 @@ from i18n import tr, init_language, reset_saved_language
 import savepatch
 
 
+def fit_width(widget, extra: int = 16):
+    """让控件宽度至少能完整显示文字(不同语言文字长度不同)"""
+    widget.setMinimumWidth(widget.sizeHint().width() + extra)
+
+
 # 质检配置类
 class QualityCheckConfig:
     """质检配置"""
@@ -902,10 +907,11 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(desc_group)
         
         # 存档补丁: 选择ROM时自动把SRAM/EEPROM存档转换为Flash存档
-        self.check_save_patch = QCheckBox(tr("选择ROM时自动打存档补丁(SRAM/EEPROM→Flash)"))
+        self.check_save_patch = QCheckBox(tr("自动存档补丁"))
         self.check_save_patch.setChecked(QSettings("chismaker", "chismaker").value("auto_save_patch", True, type=bool))
         self.check_save_patch.toggled.connect(
             lambda on: QSettings("chismaker", "chismaker").setValue("auto_save_patch", on))
+        self.check_save_patch.setToolTip(tr("选择ROM时自动把SRAM/EEPROM存档转换为Flash存档"))
         left_layout.addWidget(self.check_save_patch)
 
         # Cambiar idioma (se aplica al reiniciar)
@@ -913,7 +919,10 @@ class MainWindow(QMainWindow):
         lang_btn.clicked.connect(self.change_language)
         left_layout.addWidget(lang_btn)
 
-        left_panel.setMaximumWidth(340)
+        # 左侧面板宽度随文字自适应
+        for cb in left_panel.findChildren(QCheckBox):
+            fit_width(cb, 8)
+        left_panel.setMinimumWidth(left_panel.sizeHint().width())
         
         # 右侧主面板
         right_panel = QWidget()
@@ -960,6 +969,8 @@ class MainWindow(QMainWindow):
         control_layout.addWidget(self.reset_nor_btn)
         control_layout.addWidget(self.backup_flash_btn)
         
+        for btn in control_group.findChildren(QPushButton):
+            fit_width(btn)
         control_group.setLayout(control_layout)
         right_layout.addWidget(control_group)
         
@@ -1180,11 +1191,21 @@ class MainWindow(QMainWindow):
                 info_btn.clicked.connect(lambda checked, p=port: self.start_read_info(p))
                 button_layout.addWidget(info_btn)
                 button_layout.addWidget(backup_btn)
-                
+
+                for btn in button_widget.findChildren(QPushButton):
+                    fit_width(btn, 12)
                 self.device_table.setCellWidget(row, 3, button_widget)
+                needed = button_widget.sizeHint().width() + 8
+                if needed > self.device_table.columnWidth(3):
+                    self.device_table.setColumnWidth(3, needed)
             
             # 日志（使用最后操作）
             self.device_table.setItem(row, 4, QTableWidgetItem(tr(device.last_operation)))
+
+        # 状态列按内容自适应(至少140)
+        self.device_table.resizeColumnToContents(1)
+        if self.device_table.columnWidth(1) < 140:
+            self.device_table.setColumnWidth(1, 140)
     
     def connect_device(self, port: str):
         """连接单个设备"""

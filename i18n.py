@@ -43,7 +43,8 @@ EXACT = {
 # Fragmentos (se reemplazan de mayor a menor longitud dentro del texto)
 FRAGMENTS = {
     '该ROM已打过存档补丁，无需再次打补丁': 'Esta ROM ya tiene el parche de guardado; no hace falta repetirlo',
-    '选择ROM时自动打存档补丁(SRAM/EEPROM→Flash)': 'Parchear el guardado al elegir ROM (SRAM/EEPROM → Flash)',
+    '自动存档补丁': 'Parche de guardado automático',
+    '选择ROM时自动把SRAM/EEPROM存档转换为Flash存档': 'Al elegir una ROM, convierte el guardado SRAM/EEPROM a Flash automáticamente',
     '检测到存档类型: ': 'Tipo de guardado detectado: ',
     '未检测到存档类型，不打补丁': 'No se detectó el tipo de guardado; no se parchea',
     '该游戏无需存档补丁(已使用Flash存档)': 'Este juego no necesita parche de guardado (ya usa Flash)',

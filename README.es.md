@@ -26,6 +26,8 @@ Aplicación de escritorio (Python + PySide6) para grabar cartuchos de Game Boy A
 - ✅ Buffer Write para programar más rápido
 - ✅ Verificación automática de lo escrito
 - ✅ Progreso en vivo por dispositivo
+- ✅ **Parche de guardado automático**: al elegir una ROM que guarda en SRAM/EEPROM, se convierte a guardado en Flash (necesario para cartuchos con memoria de guardado Flash, como ChisFlash "1M Flash"/Celebi). Se crea una copia parcheada `*_flash512.gba`; tu original no se modifica
+- ✅ Botón **Leer info**: muestra el título y código del juego que hay en el cartucho
 
 ### 4. Interfaz
 - ✅ Lista de dispositivos con barra de progreso independiente
@@ -120,3 +122,7 @@ MIT License
 ## Agradecimientos
 
 Implementación del protocolo basada en el proyecto ChisFlashBurner.
+
+## Notas sobre el parche de guardado
+
+Algunos cartuchos (p. ej. ChisFlash *Celebi*, "1M Flash") guardan las partidas en un chip Flash y no en SRAM, así que los juegos con `SRAM_V`/`EEPROM_V` no pueden guardar sin parche. La app detecta el tipo de guardado y parchea automáticamente (opción: "Parche de guardado automático"). Los juegos que ya usan `FLASH_V`/`FLASH1M_V` no lo necesitan. El parche es un port a Python de [gba-flash-patcher](https://github.com/metroid-maniac/gba-flash-patcher) de Metroid Maniac (MIT). El resultado puede variar según el juego; probá que guarde antes de confiar en él.

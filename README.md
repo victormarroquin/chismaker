@@ -26,6 +26,8 @@ Desktop app (Python + PySide6) for mass-producing Game Boy Advance cartridges wi
 - ✅ Buffer Write for faster programming
 - ✅ Automatic verification of the written data
 - ✅ Live progress per device
+- ✅ **Automatic save patch**: when you pick a ROM that saves to SRAM/EEPROM, it is converted to Flash saves (needed for flash-save carts such as ChisFlash "1M Flash"/Celebi). A patched copy `*_flash512.gba` is created; your original is never modified
+- ✅ **Read info** button: shows the game title/code stored on the cartridge
 
 ### 4. User interface
 - ✅ Device list with an independent progress bar per device
@@ -120,3 +122,7 @@ MIT License
 ## Credits
 
 Protocol implementation based on the ChisFlashBurner project.
+
+## Save patching notes
+
+Some cartridges (e.g. ChisFlash *Celebi*, "1M Flash") keep saves in a Flash chip, not SRAM, so games using `SRAM_V`/`EEPROM_V` cannot save unless patched. The app detects the save type and patches automatically (toggle: "Automatic save patch"). Games that already use `FLASH_V`/`FLASH1M_V` need no patch. The patch is a Python port of [gba-flash-patcher](https://github.com/metroid-maniac/gba-flash-patcher) by Metroid Maniac (MIT). Results can vary per game; test saving before relying on it.
