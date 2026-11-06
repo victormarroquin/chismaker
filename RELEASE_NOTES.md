@@ -1,3 +1,8 @@
+## Novedades / What's new
+- **Parche de guardado automático / Automatic save patch:** al elegir una ROM que guarda en SRAM o EEPROM, se crea una copia `_flash512.gba` compatible con el chip Flash de ChisFlash Celebi. Tu ROM original no se modifica. / Picking an SRAM/EEPROM ROM creates a Flash-save `_flash512.gba` copy; the original is untouched.
+- **Botón "Leer info":** muestra qué ROM tiene el cartucho. / Shows which ROM is on the cartridge.
+- Nombres en español más claros ("Grabar", "Probar", "Respaldar") y botones que se ajustan al texto. / Clearer Spanish names and buttons sized to their text.
+
 ## Descargas / Downloads
 
 | Sistema / System | Archivo / File |
