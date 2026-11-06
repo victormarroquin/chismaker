@@ -31,6 +31,7 @@ import serial
 
 # 导入设备适配器
 from device_adapter import SuperChisDevice
+from i18n import tr, init_language, reset_saved_language
 
 
 # 质检配置类
@@ -770,7 +771,7 @@ class MainWindow(QMainWindow):
     
     def init_ui(self):
         """初始化UI"""
-        self.setWindowTitle("SuperChis 自动量产工具 V2")
+        self.setWindowTitle(tr("SuperChis 自动量产工具 V2"))
         self.setGeometry(100, 100, 1400, 800)
         
         # 主布局 - 使用分隔器
@@ -786,31 +787,31 @@ class MainWindow(QMainWindow):
         left_layout = QVBoxLayout(left_panel)
         
         # 质检配置组
-        config_group = QGroupBox("质检配置")
+        config_group = QGroupBox(tr("质检配置"))
         config_layout = QVBoxLayout()
         
         
-        self.check_ppb = QCheckBox("Flash PPB解锁")
+        self.check_ppb = QCheckBox(tr("Flash PPB解锁"))
         self.check_ppb.setChecked(self.quality_config.enable_ppb_unlock)
         self.check_ppb.stateChanged.connect(self.on_ppb_changed)
 
-        self.check_sram_basic = QCheckBox("SRAM基础读写检测")
+        self.check_sram_basic = QCheckBox(tr("SRAM基础读写检测"))
         self.check_sram_basic.setChecked(self.quality_config.enable_sram_test)
         self.check_sram_basic.stateChanged.connect(self.on_sram_basic_changed)
         
-        self.check_sram_full = QCheckBox("SRAM全量检测(128KB)")
+        self.check_sram_full = QCheckBox(tr("SRAM全量检测(128KB)"))
         self.check_sram_full.setChecked(self.quality_config.enable_full_sram)
         self.check_sram_full.stateChanged.connect(self.on_sram_full_changed)
         
-        self.check_flash_erase = QCheckBox("Flash全片擦除查空")
+        self.check_flash_erase = QCheckBox(tr("Flash全片擦除查空"))
         self.check_flash_erase.setChecked(self.quality_config.enable_flash_erase)
         self.check_flash_erase.stateChanged.connect(self.on_flash_erase_changed)
         
-        self.check_flash_fast = QCheckBox("Flash快速质检(16MB)")
+        self.check_flash_fast = QCheckBox(tr("Flash快速质检(16MB)"))
         self.check_flash_fast.setChecked(self.quality_config.enable_fast_flash)
         self.check_flash_fast.stateChanged.connect(self.on_flash_fast_changed)
         
-        self.check_ram_flash = QCheckBox("Backup Flash检测")
+        self.check_ram_flash = QCheckBox(tr("Backup Flash检测"))
         self.check_ram_flash.setChecked(self.quality_config.enable_ram_flash)
         self.check_ram_flash.stateChanged.connect(self.on_ram_flash_changed)
         
@@ -826,57 +827,62 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(config_group)
         
         # 质检说明
-        desc_group = QGroupBox("功能说明")
+        desc_group = QGroupBox(tr("功能说明"))
         desc_layout = QVBoxLayout()
         desc_text = QTextEdit()
         desc_text.setReadOnly(True)
         desc_text.setMaximumHeight(200)
-        desc_text.setHtml("""
+        desc_text.setHtml(tr("""
         <b>SRAM基础：</b>快速测试SRAM Bank0前4字节<br>
         <b>SRAM全量：</b>完整测试128KB SRAM<br>
         <b>Flash全片擦除：</b>检查并擦除整个Flash<br>
         <b>Flash快速质检：</b>仅擦除首尾4M+随机8M(共16MB)<br>
         <b>PPB解锁：</b>解除Flash写保护<br>
         <b>RAM Flash：</b>测试RAM接口访问Flash
-        """)
+        """))
         desc_layout.addWidget(desc_text)
         desc_group.setLayout(desc_layout)
         left_layout.addWidget(desc_group)
         
-        left_panel.setMaximumWidth(300)
+        # Cambiar idioma (se aplica al reiniciar)
+        lang_btn = QPushButton("Language / 语言 / Idioma")
+        lang_btn.clicked.connect(self.change_language)
+        left_layout.addWidget(lang_btn)
+
+        left_panel.setMaximumWidth(340)
         
         # 右侧主面板
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
         
         # 顶部控制区
-        control_group = QGroupBox("控制面板")
+        control_group = QGroupBox(tr("控制面板"))
         control_layout = QHBoxLayout()
         
         # ROM文件选择
-        self.file_label = QLabel("未选择ROM文件")
-        self.select_file_btn = QPushButton("选择ROM文件")
+        self.file_label = QLabel(tr("未选择ROM文件"))
+        self.select_file_btn = QPushButton(tr("选择ROM文件"))
         self.select_file_btn.clicked.connect(self.select_rom_file)
         
         # 操作按钮
-        self.connect_all_btn = QPushButton("连接所有设备")
+        self.connect_all_btn = QPushButton(tr("连接所有设备"))
         self.connect_all_btn.clicked.connect(self.connect_all_devices)
         
-        self.disconnect_all_btn = QPushButton("断开所有设备")
+        self.disconnect_all_btn = QPushButton(tr("断开所有设备"))
         self.disconnect_all_btn.clicked.connect(self.disconnect_all_devices)
         
-        self.quality_check_btn = QPushButton("批量质检")
+        self.quality_check_btn = QPushButton(tr("批量质检"))
         self.quality_check_btn.clicked.connect(self.start_quality_check_all)
         
-        self.production_btn = QPushButton("批量量产")
+        self.production_btn = QPushButton(tr("批量量产"))
         self.production_btn.clicked.connect(self.start_production_all)
         self.production_btn.setEnabled(False)
         
-        self.reset_nor_btn = QPushButton("重置NOR游戏")
+        self.reset_nor_btn = QPushButton(tr("重置NOR游戏"))
         self.reset_nor_btn.clicked.connect(self.start_reset_nor_all)
         self.reset_nor_btn.setStyleSheet("QPushButton { background-color: #FF6B6B; color: white; font-weight: bold; }")
         
-        self.backup_flash_btn = QPushButton("备份Flash")
+        self.backup_flash_btn = QPushButton(tr("备份Flash"))
         self.backup_flash_btn.clicked.connect(self.start_backup_flash_all)
         self.backup_flash_btn.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }")
         
@@ -894,16 +900,16 @@ class MainWindow(QMainWindow):
         right_layout.addWidget(control_group)
         
         # 设备列表
-        device_group = QGroupBox("设备列表")
+        device_group = QGroupBox(tr("设备列表"))
         device_layout = QVBoxLayout()
         
         self.device_table = QTableWidget()
         self.device_table.setColumnCount(5)
-        self.device_table.setHorizontalHeaderLabels(["端口", "状态", "进度", "操作", "日志"])
+        self.device_table.setHorizontalHeaderLabels([tr(t) for t in ["端口", "状态", "进度", "操作", "日志"]])
         self.device_table.setColumnWidth(0, 120)
-        self.device_table.setColumnWidth(1, 80)
+        self.device_table.setColumnWidth(1, 140)
         self.device_table.setColumnWidth(2, 160)
-        self.device_table.setColumnWidth(3, 350)
+        self.device_table.setColumnWidth(3, 660)
         self.device_table.setColumnWidth(4, 450)
         
         device_layout.addWidget(self.device_table)
@@ -911,7 +917,7 @@ class MainWindow(QMainWindow):
         right_layout.addWidget(device_group)
         
         # 全局日志
-        log_group = QGroupBox("全局日志")
+        log_group = QGroupBox(tr("全局日志"))
         log_layout = QVBoxLayout()
         
         self.global_log = QTextEdit()
@@ -969,12 +975,12 @@ class MainWindow(QMainWindow):
     def select_rom_file(self):
         """选择ROM文件"""
         file_name, _ = QFileDialog.getOpenFileName( #gba或者bin格式
-            self, "选择ROM文件", "", "ROM Files (*.gba *.bin);;All Files (*)"
+            self, tr("选择ROM文件"), "", "ROM Files (*.gba *.bin);;All Files (*)"
         )
         
         if file_name:
             self.rom_file = file_name
-            self.file_label.setText(f"已选择: {Path(file_name).name}")
+            self.file_label.setText(tr(f"已选择: {Path(file_name).name}"))
             self.production_btn.setEnabled(True)
             self.log_global(f"已选择ROM文件: {file_name}")
     
@@ -1020,7 +1026,7 @@ class MainWindow(QMainWindow):
             self.device_table.setItem(row, 0, QTableWidgetItem(port))
             
             # 状态
-            status_item = QTableWidgetItem(device.status)
+            status_item = QTableWidgetItem(tr(device.status))
             if "已连接" in device.status:
                 status_item.setBackground(QColor(144, 238, 144))
             elif "失败" in device.status:
@@ -1042,23 +1048,23 @@ class MainWindow(QMainWindow):
                 button_layout = QHBoxLayout(button_widget)
                 button_layout.setContentsMargins(2, 2, 2, 2)
                 
-                connect_btn = QPushButton("连接")
+                connect_btn = QPushButton(tr("连接"))
                 connect_btn.clicked.connect(lambda checked, p=port: self.connect_device(p))
                 
-                disconnect_btn = QPushButton("断开")
+                disconnect_btn = QPushButton(tr("断开"))
                 disconnect_btn.clicked.connect(lambda checked, p=port: self.disconnect_device(p))
                 
-                quality_btn = QPushButton("质检")
+                quality_btn = QPushButton(tr("质检"))
                 quality_btn.clicked.connect(lambda checked, p=port: self.start_quality_check(p))
                 
-                production_btn = QPushButton("量产")
+                production_btn = QPushButton(tr("量产"))
                 production_btn.clicked.connect(lambda checked, p=port: self.start_production(p))
                 
-                reset_nor_btn = QPushButton("重置NOR")
+                reset_nor_btn = QPushButton(tr("重置NOR"))
                 reset_nor_btn.clicked.connect(lambda checked, p=port: self.start_reset_nor(p))
                 reset_nor_btn.setStyleSheet("background-color: #FF6B6B; color: white;")
                 
-                backup_btn = QPushButton("备份")
+                backup_btn = QPushButton(tr("备份"))
                 backup_btn.clicked.connect(lambda checked, p=port: self.start_backup_flash(p))
                 backup_btn.setStyleSheet("background-color: #4CAF50; color: white;")
                 
@@ -1072,7 +1078,7 @@ class MainWindow(QMainWindow):
                 self.device_table.setCellWidget(row, 3, button_widget)
             
             # 日志（使用最后操作）
-            self.device_table.setItem(row, 4, QTableWidgetItem(device.last_operation))
+            self.device_table.setItem(row, 4, QTableWidgetItem(tr(device.last_operation)))
     
     def connect_device(self, port: str):
         """连接单个设备"""
@@ -1107,7 +1113,7 @@ class MainWindow(QMainWindow):
         """开始单个设备质检"""
         device = self.devices.get(port)
         if not device or not device.is_connected():
-            QMessageBox.warning(self, "警告", f"{port} 未连接")
+            QMessageBox.warning(self, tr("警告"), tr(f"{port} 未连接"))
             return
         
         # 如果已有工作线程在运行,先停止它
@@ -1137,12 +1143,12 @@ class MainWindow(QMainWindow):
     def start_production(self, port: str):
         """开始单个设备量产"""
         if not self.rom_file:
-            QMessageBox.warning(self, "警告", "请先选择ROM文件")
+            QMessageBox.warning(self, tr("警告"), tr("请先选择ROM文件"))
             return
         
         device = self.devices.get(port)
         if not device or not device.is_connected():
-            QMessageBox.warning(self, "警告", f"{port} 未连接")
+            QMessageBox.warning(self, tr("警告"), tr(f"{port} 未连接"))
             return
         
         # 如果已有工作线程在运行,先停止它
@@ -1163,7 +1169,7 @@ class MainWindow(QMainWindow):
     def start_production_all(self):
         """批量量产"""
         if not self.rom_file:
-            QMessageBox.warning(self, "警告", "请先选择ROM文件")
+            QMessageBox.warning(self, tr("警告"), tr("请先选择ROM文件"))
             return
         
         delay = 0
@@ -1177,13 +1183,13 @@ class MainWindow(QMainWindow):
         """开始单个设备重置NOR游戏"""
         device = self.devices.get(port)
         if not device or not device.is_connected():
-            QMessageBox.warning(self, "警告", f"{port} 未连接")
+            QMessageBox.warning(self, tr("警告"), tr(f"{port} 未连接"))
             return
         
         # 确认操作
         reply = QMessageBox.question(
-            self, "确认操作",
-            f"确定要重置 {port} 的NOR游戏吗?\n\n这将擦除Flash元数据区域(2MB),操作不可逆!",
+            self, tr("确认操作"),
+            tr(f"确定要重置 {port} 的NOR游戏吗?\n\n这将擦除Flash元数据区域(2MB),操作不可逆!"),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
@@ -1209,8 +1215,8 @@ class MainWindow(QMainWindow):
         """批量重置NOR游戏"""
         # 确认操作
         reply = QMessageBox.question(
-            self, "确认操作",
-            f"确定要对所有已连接设备重置NOR游戏吗?\n\n这将擦除所有设备的Flash元数据区域(2MB),操作不可逆!",
+            self, tr("确认操作"),
+            tr(f"确定要对所有已连接设备重置NOR游戏吗?\n\n这将擦除所有设备的Flash元数据区域(2MB),操作不可逆!"),
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
@@ -1238,13 +1244,13 @@ class MainWindow(QMainWindow):
         """开始单个设备备份Flash"""
         device = self.devices.get(port)
         if not device or not device.is_connected():
-            QMessageBox.warning(self, "警告", f"{port} 未连接")
+            QMessageBox.warning(self, tr("警告"), tr(f"{port} 未连接"))
             return
         
         # 选择保存文件
         default_name = f"flash_backup_{port.replace('/', '_')}_{time.strftime('%Y%m%d_%H%M%S')}.bin"
         backup_file, _ = QFileDialog.getSaveFileName(
-            self, "保存Flash备份", default_name, "Binary Files (*.bin);;All Files (*)"
+            self, tr("保存Flash备份"), default_name, "Binary Files (*.bin);;All Files (*)"
         )
         
         if not backup_file:
@@ -1268,7 +1274,7 @@ class MainWindow(QMainWindow):
         """批量备份Flash"""
         # 选择保存目录
         backup_dir = QFileDialog.getExistingDirectory(
-            self, "选择备份保存目录", "",
+            self, tr("选择备份保存目录"), "",
             QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
         )
         
@@ -1307,7 +1313,7 @@ class MainWindow(QMainWindow):
             # 仅更新文本内容，不重建widget
             for row in range(self.device_table.rowCount()):
                 if self.device_table.item(row, 0).text() == port:
-                    self.device_table.setItem(row, 4, QTableWidgetItem(message))
+                    self.device_table.setItem(row, 4, QTableWidgetItem(tr(message)))
                     break
         
         self.log_global(f"[{port}] {message}")
@@ -1360,10 +1366,18 @@ class MainWindow(QMainWindow):
             # 从字典中移除引用
             del self.workers[port]
     
+    def change_language(self):
+        """Borra el idioma guardado; se vuelve a preguntar al reiniciar"""
+        reset_saved_language()
+        QMessageBox.information(
+            self, "Language / 语言 / Idioma",
+            "Restart the app to choose a language.\n重新启动程序以选择语言。\nReinicie la aplicación para elegir el idioma."
+        )
+
     def log_global(self, message: str):
         """全局日志"""
         timestamp = time.strftime("%H:%M:%S")
-        self.global_log.append(f"[{timestamp}] {message}")
+        self.global_log.append(tr(f"[{timestamp}] {message}"))
     
     def closeEvent(self, event):
         """关闭窗口"""
@@ -1407,6 +1421,7 @@ class MainWindow(QMainWindow):
 def main():
     """主函数"""
     app = QApplication(sys.argv)
+    init_language()
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
